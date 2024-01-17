@@ -11,11 +11,11 @@ download6 <- function(start, end){
     destination= "~/Dropbox/Mac (2)/Downloads",
     product= "GLOBAL_MULTIYEAR_PHY_001_030",
     layer= "cmems_mod_glo_phy_my_0.083_P1D-m",
-    variable=c("so", "thetao"),
+    variable=c("so", "bottomT"),
     output="netcdf",
     region=c(-125, 31, -117, 48),
     timerange=c(start, end),
-    verticalrange=c(9,1300),
+    verticalrange=c(0,10),
     overwrite = FALSE
   )
 }

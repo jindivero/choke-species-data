@@ -1,9 +1,10 @@
 #Prepare data
-source("Code/util_funs.R")
+source("/Users/jindiv/Library/CloudStorage/Dropbox/choke species/code/choke-species-data/code/util_funs.R")
+setwd("/Users/jindiv/Library/CloudStorage/Dropbox/choke species/code/choke-species-data")
 
-sci_name <- "Anoplopoma fimbria" 
+sci_name <- "anoplopoma fimbria" 
 spc <- "sablefish" 
-dat.by.size <- length_expand(sci_name)
+dat.by.size <- length_expand_nwfsc(spc)
 dat <- load_data(spc = spc, dat.by.size = dat.by.size)
 
 ### Set up environmental data ###

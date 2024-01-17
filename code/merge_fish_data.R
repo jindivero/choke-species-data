@@ -11,13 +11,13 @@ source("util_funs.R")
 
 ### Raw Data ###
 ## Haul and catch data from https://github.com/DFO-NOAA-Pacific/surveyjoin ##
-load("~/data/fish_raw/NOAA/afsc_catch.rda")
-load("~/data/fish_raw/NOAA/afsc_haul.rda")
-load("~/data/fish_raw/NOAA/nwfsc_catch.rda")
-load("~/data/fish_raw/NOAA/nwfsc_haul.rda")
-afsc_haul_o2 <- readRDS("~/data/fish_raw/NOAA/2012-2016_o2.rds")
-pbs_haul <- readRDS("~/data/fish_raw/pbs-haul.rds")
-pbs_catch <- readRDS("~data/fish_raw/pbs-catch.rds")
+load("/Users/jindiv/Library/CloudStorage/Dropbox/choke species/code/choke-species-data/data/fish_raw/NOAA/afsc_catch.rda")
+load("/Users/jindiv/Library/CloudStorage/Dropbox/choke species/code/choke-species-data/data/fish_raw/NOAA/afsc_haul.rda")
+load("/Users/jindiv/Library/CloudStorage/Dropbox/choke species/code/choke-species-data/data/fish_raw/NOAA/nwfsc_catch.rda")
+load("/Users/jindiv/Library/CloudStorage/Dropbox/choke species/code/choke-species-data/data/fish_raw/NOAA/nwfsc_haul.rda")
+#afsc_haul_o2 <- readRDS("~/data/fish_raw/NOAA/2012-2016_o2.rds")
+pbs_haul <- readRDS("/Users/jindiv/Library/CloudStorage/Dropbox/choke species/code/choke-species-data/data/fish_raw/pbs-haul.rds")
+pbs_catch <- readRDS("/Users/jindiv/Library/CloudStorage/Dropbox/choke species/code/choke-species-data/data/fish_raw/pbs-catch.rds")
 
 if(surveyjoin) {
   remotes::install_github("DFO-NOAA-Pacific/surveyjoin", dependencies = TRUE)
