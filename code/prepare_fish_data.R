@@ -3,10 +3,10 @@ library(rgdal)
 source("/Users/jindiv/Library/CloudStorage/Dropbox/choke species/code/choke-species-data/code/util_funs.R")
 setwd("/Users/jindiv/Library/CloudStorage/Dropbox/choke species/code/choke-species-data")
 
-sci_name <- "anoplopoma fimbria" 
+sci_name <- "gadus chalcogrammus" 
 spc <- "sablefish" 
-dat.by.size <- length_expand_nwfsc(spc)
-dat <- load_data_nwfsc(spc = spc, dat.by.size = dat.by.size)
+dat.by.size <- length_expand_bc(sci_name)
+dat <- load_data_bc(spc = sci_name, dat.by.size = dat.by.size)
 
 ### Set up environmental data ###
 kelvin = 273.15

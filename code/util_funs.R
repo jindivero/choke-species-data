@@ -464,19 +464,48 @@ length_expand_afsc <- function(spc) {
   return(all_hauls)
 }
 
-length_expand_bc <- function(spc) {
+length_expand_bc <- function(sci_name) {
   # load, clean, and join data
-  bio <- read.csv("data/fish_raw/BC/QCS_biology.csv")
+  bio2 <- read.csv("data/fish_raw/BC/QCS_biology.csv")
   haul <- readRDS("data/fish_raw/BC/pbs-haul.rds")
   catch <- readRDS("data/fish_raw/BC/pbs-catch.rds")
-  names(catch) = tolower(names(catch))
+  haul2 <- read.csv("data/fish_raw/BC/QCS_effort.csv")
+  
+  #Combine the official BC bio data and the official BC haul data to get metadata (from here: https://open.canada.ca/data/en/dataset/86af7918-c2ab-4f1a-ba83-94c9cebb0e6c)
+  bio2$Set.number <- bio2$Tow.number
+  bio <- dplyr::left_join(bio2, haul2, relationship="many-to-many")
+  
   names(bio) = tolower(names(bio))
   names(haul) = tolower(names(haul))
   
+  #Put bio data in the same format as the NOAA bio data
+  bio$scientific_name <- tolower(bio$scientific.name)
+  bio$common_name <- tolower(bio$english.common.name)
+  bio$weight <- bio$weight..g.*0.001
+  bio$length_cm <- bio$fork.length..mm.*0.1
+  bio$length_cm <- ifelse(is.na(bio$length_cm), (bio$total.length..mm.*0.1), bio$length_cm)
+  
+  #Make column names consistent so can join to surveyjoin haul data to get event_id
+  haul$year <- as.character(substr(haul$date, start=1, stop=4))
+  bio$year <- as.character(bio$survey.year)
+  haul$set.date <- substr(haul$date, start=1, stop=10)
+  bio$lat_start <- bio$start.latitude
+  bio$lat_end <- bio$end.latitude
+  bio$lon_start <- bio$start.longitude
+  bio$lon_end <- bio$end.longitude
+  
+  #Combine BC bio data and haul metadata with surveyjoin metadata
+  bio3 <- dplyr::left_join(bio[,c("age", "sex", "length_cm", "weight", "scientific_name", "common_name", "lat_start", "lon_start", "lat_end", "lon_end", "set.date")], haul, relationship="many-to-many")
+  bio <- bio3
+  
+  #Clean catch data
+  names(catch) = tolower(names(catch))
+  #Function to get scientific name from ITIS info
   extract_name <- function(x){
     name <- x$name[14]
     return(name)
   }
+  #Pull and extract ITIS info to get species names
   itis <- unique(catch$itis)
   scientific_names <-  taxize::classification(itis, db="itis")
   itis <- as.data.frame(itis)
@@ -485,32 +514,16 @@ length_expand_bc <- function(spc) {
   itis$scientific_name <- tolower(names)
   catch <- left_join(catch,itis)
   
-  bio$scientific_name <- tolower(bio$scientific.name)
-  bio$common_name <- tolower(bio$english.common.name)
-  bio$weight <- bio$weight..g.*0.001
-  bio$length_cm <- bio$fork.length..mm.*0.1
-  
-  bio$trawl_id = as.character(bio$trawl_id)
-  haul$trawl_id = as.character(haul$event_id)
-  catch$trawl_id=as.character(catch$trawl_id)
-  haul$year <- as.character(substr(haul$date, start=1, stop=4))
-  bio$year <- as.character(bio$year)
-  catch$date <- NULL
-  bio$date <- NULL
-  bio$year <- NULL
-  
   #haul$sampling_end_hhmmss = as.numeric(haul$sampling_end_hhmmss)
   #haul$sampling_start_hhmmss = as.numeric(haul$sampling_start_hhmmss)
   
-  #Combine data
-  dat = dplyr::left_join(catch[,c("trawl_id","common_name", "subsample_count","area_swept_ha","longitude_dd", "latitude_dd",
-                                  "subsample_wt_kg","total_catch_numbers","total_catch_wt_kg","cpue_kg_km2")], haul, relationship = "many-to-many") %>%
-    dplyr::left_join(filter(bio[,c("trawl_id", "scientific_name", "common_name", "weight", "ageing_lab", "oto_id", "length_cm", "width_cm", "sex", "age")], !is.na(length_cm)), relationship = "many-to-many") %>%
-    filter(performance == "Satisfactory")
-  
+  #Combine catch data with haul data
+  dat <- dplyr::left_join(catch, haul, relationship = "many-to-many")
+  #Combine bio/haul data with catch data
+  dat <- dplyr::left_join(dat, filter(bio[,c("event_id", "age", "sex","length_cm", "weight", "scientific_name", "common_name")], !is.na(length_cm)), relationship = "many-to-many")
   
   # filter out species of interest from joined (catch/haul/bio) dataset
-  dat_sub = dplyr::filter(dat, common_name == spc)
+  dat_sub = dplyr::filter(dat, sci_name==sci_name)
   
   # fit length-weight regression by year to predict fish weights that have lengths only.
   # note a rank-deficiency warning may indicate there is insufficient data for some year/sex combinations (likely for unsexed group)
@@ -534,8 +547,8 @@ length_expand_bc <- function(spc) {
     dplyr::select(-data, -model, -tidied, -augmented) %>%
     dplyr::mutate(weight = ifelse(is.na(weight), exp(pred), weight))
   
-  trawlids <- unique(dat_pos$trawl_id)
-  p <- data.frame(trawl_id = trawlids,
+  trawlids <- unique(dat_pos$event_id)
+  p <- data.frame(event_id = trawlids,
                   p1 = 0,
                   p2 = 0,
                   p3 = 0,
@@ -543,7 +556,7 @@ length_expand_bc <- function(spc) {
   
   sizethresholds <- quantile(dat_pos$weight, c(0.15, 0.5, 0.85, 1), na.rm = T)
   for (i in 1:length(trawlids)) {
-    haul_sample<- dplyr::filter(dat_pos, trawl_id == trawlids[i])
+    haul_sample<- dplyr::filter(dat_pos, event_id == trawlids[i])
     if(nrow(haul_sample) > 0 | var(haul_sample$weight >0)) {
       # fit kernel density to weight frequency
       smoothed_w <- KernSmooth::bkde(haul_sample$weight, range.x = c(min(dat_pos$weight), max(dat_pos$weight)), bandwidth = 2)
@@ -574,15 +587,85 @@ length_expand_bc <- function(spc) {
   
   
   # add hauls with zero catch back in
-  absent = filter(dat_sub, cpue_kg_km2 == 0)
-  trawlids <- unique(absent$trawl_id)
-  absent.df <- data.frame(trawl_id = trawlids,
+  absent = filter(dat_sub, catch_weight == 0)
+  trawlids <- unique(absent$event_id)
+  absent.df <- data.frame(event_id = trawlids,
                           p1 = 0,
                           p2 = 0,
                           p3 = 0,
                           p4 = 0)
   
   all_hauls <- rbind(p, absent.df)
-  all_hauls$trawl_id <- as.numeric(all_hauls$trawl_id)
+  all_hauls$event_id <- as.numeric(all_hauls$event_id)
   return(all_hauls)
+}
+
+load_data_bc <- function(spc,dat.by.size, length=T) {
+  catch <- readRDS("data/fish_raw/BC/pbs-catch.rds")
+  haul <- readRDS("data/fish_raw/BC/pbs-haul.rds")
+  
+  #Clean catch data
+  names(catch) = tolower(names(catch))
+  #Function to get scientific name from ITIS info
+  extract_name <- function(x){
+    name <- x$name[14]
+    return(name)
+  }
+  #Pull and extract ITIS info to get species names
+  itis <- unique(catch$itis)
+  scientific_names <-  taxize::classification(itis, db="itis")
+  itis <- as.data.frame(itis)
+  names <-lapply(scientific_names, extract_name)
+  names <- unlist(names)
+  itis$scientific_name <- tolower(names)
+  catch <- left_join(catch,itis)
+  
+  #haul$sampling_end_hhmmss = as.numeric(haul$sampling_end_hhmmss)
+  #haul$sampling_start_hhmmss = as.numeric(haul$sampling_start_hhmmss)
+  
+  #Combine catch data with haul data
+  dat <- dplyr::left_join(catch, haul, relationship = "many-to-many")
+  
+  names(dat) = tolower(names(dat))
+ # dat.by.size$event_id <- as.character(dat.by.size$event_id)
+  dat = dplyr::filter(dat, scientific_name == sci_name)
+  dat <- left_join(dat, dat.by.size, by = "event_id")
+  # remove tows where there was positive catch but no length measurements
+  if(length){
+    dat <- dplyr::filter(dat, !is.na(p1))
+  }
+  # analyze or years and hauls with adequate oxygen and temperature data, within range of occurrence
+  
+  # get julian day
+  dat$julian_day <- rep(NA, nrow(dat))
+  for (i in 1:nrow(dat)) dat$julian_day[i] <- as.POSIXlt(dat$date[i], format = "%Y-%b-%d")$yday
+  
+  
+  #O2 from trawl data is in ml/l 
+  # just in case, remove any missing or nonsense values from sensors
+  # dat <- dplyr::filter(dat, !is.na(o2), !is.na(sal), !is.na(temp), is.finite(sal))
+  # dat <- calc_po2_mi(dat)
+  # dat <- dplyr::filter(dat, !is.na(temp), !is.na(mi))
+  
+  # prepare data and models -------------------------------------------------
+  dat$cpue_kg_km2 <- dat$catch_weight
+  dat$longitude_dd <- dat$lon_start
+  dat$latitude_dd <- dat$lat_start
+  dat$year <- substr(dat$date, start=1, stop=4)
+  dat <- dplyr::select(dat, event_id, scientific_name, survey_name, year, longitude_dd, latitude_dd, cpue_kg_km2,
+                       depth_m, julian_day, pass, p1, p2, p3, p4)
+  
+  
+  # UTM transformation
+  dat_ll = dat
+  sp::coordinates(dat_ll) <- c("longitude_dd", "latitude_dd")
+  sp::proj4string(dat_ll) <- sp::CRS("+proj=longlat +datum=WGS84")
+  # convert to utm with spTransform
+  dat_utm = spTransform(dat_ll, 
+                        CRS("+proj=utm +zone=10 +datum=WGS84 +units=km"))
+  # convert back from sp object to data frame
+  dat = as.data.frame(dat_utm)
+  dat = dplyr::rename(dat, longitude = longitude_dd,
+                      latitude = latitude_dd)
+  return(dat)
 }
