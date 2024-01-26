@@ -116,8 +116,9 @@ load_data_nwfsc <- function(spc,dat.by.size, length=T) {
   # dat <- dplyr::filter(dat, !is.na(temp), !is.na(mi))
   
   # prepare data and models -------------------------------------------------
-  
-  dat <- dplyr::select(dat, trawl_id, common_name, year, longitude_dd, latitude_dd, cpue_kg_km2,
+  dat$long <- dat$longitude_dd
+  dat$lat <- dat$latitude_dd
+  dat <- dplyr::select(dat, trawl_id, common_name, project, vessel, tow, year, longitude_dd, latitude_dd, long, lat, cpue_kg_km2,
                        depth_m, julian_day, pass, p1, p2, p3, p4)
   
   
@@ -126,12 +127,12 @@ load_data_nwfsc <- function(spc,dat.by.size, length=T) {
   sp::coordinates(dat_ll) <- c("longitude_dd", "latitude_dd")
   sp::proj4string(dat_ll) <- sp::CRS("+proj=longlat +datum=WGS84")
   # convert to utm with spTransform
-  dat_utm = spTransform(dat_ll, 
-                        CRS("+proj=utm +zone=10 +datum=WGS84 +units=km"))
+  dat_utm = sp::spTransform(dat_ll, 
+                        sp::CRS("+proj=utm +zone=10 +datum=WGS84 +units=km"))
   # convert back from sp object to data frame
   dat = as.data.frame(dat_utm)
-  dat = dplyr::rename(dat, longitude = longitude_dd,
-                      latitude = latitude_dd)
+  dat = dplyr::rename(dat, longitude = coords.x1,
+                      latitude = coords.x2)
   return(dat)
 }
 
@@ -246,62 +247,107 @@ length_expand_nwfsc <- function(spc) {
 }
 
 # Species of interest and max. juvenile lengths (define ontogenetic classes)
-length_expand_afsc <- function(spc) {
+length_expand_afsc <- function(sci_name, years, region) {
   # load, clean, and join data
-  bio <- read.csv("data/fish_raw/NOAA/LENGTH_AFSC.csv")
-  load("data/fish_raw/NOAA/afsc_haul.rda")
-  haul <- afsc_haul
-  load("data/fish_raw/NOAA/afsc_catch.rda")
-  catch <- afsc_catch
-  names(catch) = tolower(names(catch))
-  names(bio) = tolower(names(bio))
-  names(haul) = tolower(names(haul))
-  catch$scientific_name <- tolower(catch$scientific_name)
+  bio2 <-readRDS("data/fish_raw/NOAA/ak_bts_goa_ebs_nbs_all_levels.RDS")
+  catch2 <- readRDS("data/fish_raw/NOAA/ak_bts_goa_ebs_nbs_cpue_zerofilled.RDS")
   
-  bio$trawl_id = as.character(bio$trawl_id)
-  haul$trawl_id = as.character(haul$event_id)
-  catch$trawl_id=as.character(catch$trawl_id)
-  haul$year <- as.character(substr(haul$date, start=1, stop=4))
-  bio$year <- as.character(bio$year)
-  catch$date <- NULL
-  bio$date <- NULL
-  bio$year <- NULL
+  #Isolate necessary parts of full data to get specimen weights/lengths per haul
+  haul <- bio2$haul
+  specimen <- bio2$specimen
+  species <- bio2$species
+  size <- bio2$size
   
-  #haul$sampling_end_hhmmss = as.numeric(haul$sampling_end_hhmmss)
-  #haul$sampling_start_hhmmss = as.numeric(haul$sampling_start_hhmmss)
+  #make lowercase
+  names(haul) <- tolower(names(haul))
+  names(specimen) <- tolower(names(specimen))
+  names(species) <- tolower(names(species))
+  names(size) <- tolower(names(bio2$size))
   
-  #Combine data
-  dat = dplyr::left_join(catch[,c("trawl_id","common_name", "subsample_count","area_swept_ha","longitude_dd", "latitude_dd",
-                                  "subsample_wt_kg","total_catch_numbers","total_catch_wt_kg","cpue_kg_km2")], haul, relationship = "many-to-many") %>%
-    dplyr::left_join(filter(bio[,c("trawl_id", "scientific_name", "common_name", "weight", "ageing_lab", "oto_id", "length_cm", "width_cm", "sex", "age")], !is.na(length_cm)), relationship = "many-to-many") %>%
-    filter(performance == "Satisfactory")
+  species$species_name <- tolower(species$species_name)
   
+  #Combine size and species
+  lengths <- dplyr::left_join(size, species)
+  lengths <- dplyr::left_join(lengths, haul)
+  
+  #Convert length to cm
+  lengths$length_cm <- lengths$length*0.1
+  
+  #Expand to make separate row for each measurement
+  lengths <- dplyr::filter(lengths, !is.na(frequency))
+  lengths2 <- tidyr::uncount(lengths, weights=frequency)
+  
+  #Combine
+  bio <- dplyr::left_join(specimen, species)
+  bio <- dplyr::left_join(bio, haul)
+  
+  #Make cm
+  bio$length_cm <- bio$length*0.1
+  
+  #Combine specimen and length data
+  bio3 <- dplyr::bind_rows(bio, lengths)
+  
+  #Combine catch data with species data
+  names(catch2) <- tolower(names(catch2))
+  catch <- dplyr::left_join(catch2, species)
   
   # filter out species of interest from joined (catch/haul/bio) dataset
-  dat_sub = dplyr::filter(dat, common_name == spc)
+  catch_sub = dplyr::filter(catch, species_name == sci_name)
+  bio_sub = dplyr::filter(bio3, species_name == sci_name)
+  
+  #Select only necessary columns for joining
+  catch4 <- catch_sub[,c("hauljoin", "survey", "year", "depth_m", "latitude_dd_start", "longitude_dd_start", "cpue_kgkm2", "species_name", "common_name")]
+  bio4 <- dplyr::filter(bio_sub[,c("hauljoin", "species_name", "common_name", "length_cm", "weight", "sex", "age")], !is.na(length_cm))
+  #Combine data
+  dat <-dplyr::left_join(catch4, bio4, relationship = "many-to-many")
+  dat <- dplyr::mutate(dat, trawl_id=hauljoin)
+  
+  #Performance metric?
+  
+  #If years=T in the function, this will subset data to 1999 onward to remove possibly funky data prior to 1999
+  if(years){
+  dat_sub = dplyr::filter(dat, year>1998)
+  }
   
   # fit length-weight regression by year to predict fish weights that have lengths only.
   # note a rank-deficiency warning may indicate there is insufficient data for some year/sex combinations (likely for unsexed group)
   
   fitted = dat_sub
+  #If region=T in function, this will do the length-weight regression for each broad geographic region (EBS, NBS, and GOA)
+  if(region){
   fitted <-  filter(fitted, !is.na(length_cm), !is.na(weight))%>%
     # dplyr::select(trawl_id,year,
     #               subsample_wt_kg, total_catch_wt_kg, area_swept_ha_der, cpue_kg_km2,
     #               individual_tracking_id, sex, length_cm, weight) %>%
-    group_nest(year) %>%
+    group_nest(year,survey) %>%
     mutate(
       model = purrr::map(data, ~ lm(log(weight) ~ log(length_cm), data = .x)),
       tidied = purrr::map(model, broom::tidy),
       augmented = purrr::map(model, broom::augment),
       predictions = purrr::map2(data, model, modelr::add_predictions)
     )
-  
+    }
+  #If region=F in function, this will do length-weight regression for all of Alaska combined
+    if(!region){
+      fitted <-  filter(fitted, !is.na(length_cm), !is.na(weight))%>%
+        # dplyr::select(trawl_id,year,
+        #               subsample_wt_kg, total_catch_wt_kg, area_swept_ha_der, cpue_kg_km2,
+        #               individual_tracking_id, sex, length_cm, weight) %>%
+          group_nest(year) %>%
+            mutate(
+              model = purrr::map(data, ~ lm(log(weight) ~ log(length_cm), data = .x)),
+              tidied = purrr::map(model, broom::tidy),
+              augmented = purrr::map(model, broom::augment),
+              predictions = purrr::map2(data, model, modelr::add_predictions)
+            )
+        }
   # replace missing weights with predicted weights
   dat_pos = fitted %>%
     tidyr::unnest(predictions) %>%
     dplyr::select(-data, -model, -tidied, -augmented) %>%
     dplyr::mutate(weight = ifelse(is.na(weight), exp(pred), weight))
   
+  #make column of trawl_id, which is called hauljoin originally in the AFSC data
   trawlids <- unique(dat_pos$trawl_id)
   p <- data.frame(trawl_id = trawlids,
                   p1 = 0,
@@ -342,7 +388,7 @@ length_expand_afsc <- function(spc) {
   
   
   # add hauls with zero catch back in
-  absent = filter(dat_sub, cpue_kg_km2 == 0)
+  absent = filter(dat_sub, cpue_kgkm2 == 0)
   trawlids <- unique(absent$trawl_id)
   absent.df <- data.frame(trawl_id = trawlids,
                           p1 = 0,
@@ -355,123 +401,87 @@ length_expand_afsc <- function(spc) {
   return(all_hauls)
 }
 
-length_expand_afsc <- function(spc) {
-  # load, clean, and join data
-  bio <- read.csv("data/fish_raw/NOAA/LENGTH_AFSC.csv")
-  load("data/fish_raw/NOAA/afsc_haul.rda")
-  haul <- afsc_haul
-  load("data/fish_raw/NOAA/afsc_catch.rda")
-  catch <- afsc_catch
-  names(catch) = tolower(names(catch))
-  names(bio) = tolower(names(bio))
-  names(haul) = tolower(names(haul))
-  catch$scientific_name <- tolower(catch$scientific_name)
-  
-  bio$trawl_id = as.character(bio$trawl_id)
-  haul$trawl_id = as.character(haul$event_id)
-  catch$trawl_id=as.character(catch$trawl_id)
-  haul$year <- as.character(substr(haul$date, start=1, stop=4))
-  bio$year <- as.character(bio$year)
-  catch$date <- NULL
-  bio$date <- NULL
-  bio$year <- NULL
-  
-  #haul$sampling_end_hhmmss = as.numeric(haul$sampling_end_hhmmss)
-  #haul$sampling_start_hhmmss = as.numeric(haul$sampling_start_hhmmss)
-  
-  #Combine data
-  dat = dplyr::left_join(catch[,c("trawl_id","common_name", "subsample_count","area_swept_ha","longitude_dd", "latitude_dd",
-                                  "subsample_wt_kg","total_catch_numbers","total_catch_wt_kg","cpue_kg_km2")], haul, relationship = "many-to-many") %>%
-    dplyr::left_join(filter(bio[,c("trawl_id", "scientific_name", "common_name", "weight", "ageing_lab", "oto_id", "length_cm", "width_cm", "sex", "age")], !is.na(length_cm)), relationship = "many-to-many") %>%
-    filter(performance == "Satisfactory")
-  
-  
-  # filter out species of interest from joined (catch/haul/bio) dataset
-  dat_sub = dplyr::filter(dat, common_name == spc)
-  
-  # fit length-weight regression by year to predict fish weights that have lengths only.
-  # note a rank-deficiency warning may indicate there is insufficient data for some year/sex combinations (likely for unsexed group)
-  
-  fitted = dat_sub
-  fitted <-  filter(fitted, !is.na(length_cm), !is.na(weight))%>%
-    # dplyr::select(trawl_id,year,
-    #               subsample_wt_kg, total_catch_wt_kg, area_swept_ha_der, cpue_kg_km2,
-    #               individual_tracking_id, sex, length_cm, weight) %>%
-    group_nest(year) %>%
-    mutate(
-      model = purrr::map(data, ~ lm(log(weight) ~ log(length_cm), data = .x)),
-      tidied = purrr::map(model, broom::tidy),
-      augmented = purrr::map(model, broom::augment),
-      predictions = purrr::map2(data, model, modelr::add_predictions)
-    )
-  
-  # replace missing weights with predicted weights
-  dat_pos = fitted %>%
-    tidyr::unnest(predictions) %>%
-    dplyr::select(-data, -model, -tidied, -augmented) %>%
-    dplyr::mutate(weight = ifelse(is.na(weight), exp(pred), weight))
-  
-  trawlids <- unique(dat_pos$trawl_id)
-  p <- data.frame(trawl_id = trawlids,
-                  p1 = 0,
-                  p2 = 0,
-                  p3 = 0,
-                  p4 = 0)
-  
-  sizethresholds <- quantile(dat_pos$weight, c(0.15, 0.5, 0.85, 1), na.rm = T)
-  for (i in 1:length(trawlids)) {
-    haul_sample<- dplyr::filter(dat_pos, trawl_id == trawlids[i])
-    if(nrow(haul_sample) > 0 | var(haul_sample$weight >0)) {
-      # fit kernel density to weight frequency
-      smoothed_w <- KernSmooth::bkde(haul_sample$weight, range.x = c(min(dat_pos$weight), max(dat_pos$weight)), bandwidth = 2)
-      # make sure smoother predicts positive or zero density
-      smoothed_w$y[smoothed_w$y<0] <- 0
-      # calculate proportion by biomass and by number
-      p_w_byweight <- smoothed_w$y * smoothed_w$x / sum(smoothed_w$x*smoothed_w$y)
-      
-      
-      p_w_byweight[p_w_byweight<0] <- 0
-      #p_w_bynum[p_w_bynum<0] <- 0
-      
-      p1 <- sum(p_w_byweight[smoothed_w$x<=sizethresholds[1]])
-      p2 <- sum(p_w_byweight[smoothed_w$x>sizethresholds[1] & smoothed_w$x <=sizethresholds[2]])
-      p3 <- sum(p_w_byweight[smoothed_w$x>sizethresholds[2] & smoothed_w$x <=sizethresholds[3]])
-      p4 <- sum(p_w_byweight[smoothed_w$x>sizethresholds[3]])
-      
-      
-      
-      p[i,2:5] <- c(p1, p2, p3, p4)
-      
+load_data_afsc <- function(sci_name,dat.by.size, length=T) {
+    dat <-readRDS("data/fish_raw/NOAA/ak_bts_goa_ebs_nbs_cpue_zerofilled.RDS")
+    bio2 <-readRDS("data/fish_raw/NOAA/ak_bts_goa_ebs_nbs_all_levels.RDS")
+    species <- bio2$species
+    names(dat) = tolower(names(dat))
+    names(species) =tolower(names(species))
+    species$species_name <- tolower(species$species_name)
+    species$common_name <- tolower(species$common_name)
+    dat <- dplyr::left_join(dat, species)
+    dat.by.size$trawl_id <- as.character(dat.by.size$trawl_id)
+    dat$trawl_id <-as.character(dat$hauljoin)
+    dat = dplyr::filter(dat, species_name ==sci_name)
+    dat <- left_join(dat, dat.by.size, by = "trawl_id")
+    # remove tows where there was positive catch but no length measurements
+    if(length){
+      dat <- dplyr::filter(dat, !is.na(p1))
     }
-    else {
-      indx <- which(sizethresholds>haul_sample$weight)
-      p[i, min(indx)+1] <- 1
-    }
+    # analyze or years and hauls with adequate oxygen and temperature data, within range of occurrence
+    
+    # get julian day
+    dat$julian_day <- rep(NA, nrow(dat))
+    haul <- bio2$haul
+    names(haul) <- tolower(names(haul))
+    haul <- haul[,c("hauljoin", "start_time")]
+    dat <- left_join(dat, haul)
+    for (i in 1:nrow(dat)) dat$julian_day[i] <- as.POSIXlt(dat$start_time[i], format = "%Y-%b-%d")$yday
+    
+    
+    #O2 from trawl data is in ml/l 
+    # just in case, remove any missing or nonsense values from sensors
+    # dat <- dplyr::filter(dat, !is.na(o2), !is.na(sal), !is.na(temp), is.finite(sal))
+    # dat <- calc_po2_mi(dat)
+    # dat <- dplyr::filter(dat, !is.na(temp), !is.na(mi))
+    
+    # prepare data and models -------------------------------------------------
+    dat$longitude_dd <- dat$longitude_dd_start
+    dat$latitude_dd <- dat$latitude_dd_start
+    dat$long <- dat$longitude_dd
+    dat$lat <- dat$latitude_dd
+    dat$scientific_name <- dat$species_name
+    dat$cpue_kg_km2 <- dat$cpue_kgkm2
+    dat$project <- dat$survey
+    dat$event_id <- dat$trawl_id
+    dat <- dplyr::select(dat, event_id, common_name, scientific_name, project, year, bottom_temperature_c, longitude_dd, latitude_dd, long, lat, cpue_kg_km2,
+                         depth_m, julian_day, p1, p2, p3, p4)
+    
+    
+    # UTM transformation
+    dat_ll = dat
+    sp::coordinates(dat_ll) <- c("longitude_dd", "latitude_dd")
+    sp::proj4string(dat_ll) <- sp::CRS("+proj=longlat +datum=WGS84")
+    # convert to utm with spTransform
+    dat_utm = sp::spTransform(dat_ll, 
+                              sp::CRS("+proj=utm +zone=10 +datum=WGS84 +units=km"))
+    # convert back from sp object to data frame
+    dat = as.data.frame(dat_utm)
+    dat = dplyr::rename(dat, longitude = coords.x1,
+                        latitude = coords.x2)
+    return(dat)
   }
-  
-  
-  # add hauls with zero catch back in
-  absent = filter(dat_sub, cpue_kg_km2 == 0)
-  trawlids <- unique(absent$trawl_id)
-  absent.df <- data.frame(trawl_id = trawlids,
-                          p1 = 0,
-                          p2 = 0,
-                          p3 = 0,
-                          p4 = 0)
-  
-  all_hauls <- rbind(p, absent.df)
-  all_hauls$trawl_id <- as.numeric(all_hauls$trawl_id)
-  return(all_hauls)
-}
 
 length_expand_bc <- function(sci_name) {
   # load, clean, and join data
-  bio2 <- read.csv("data/fish_raw/BC/QCS_biology.csv")
+  bio_qc <- read.csv("data/fish_raw/BC/QCS_biology.csv")
+  bio_vi <- read.csv("data/fish_raw/BC/WCVI_biology.csv")
+  bio_hs <- read.csv("data/fish_raw/BC/HS_biology.csv")
+  bio_hg <- read.csv("data/fish_raw/BC/WCHG_biology.csv")
+  
   haul <- readRDS("data/fish_raw/BC/pbs-haul.rds")
   catch <- readRDS("data/fish_raw/BC/pbs-catch.rds")
-  haul2 <- read.csv("data/fish_raw/BC/QCS_effort.csv")
   
-  #Combine the official BC bio data and the official BC haul data to get metadata (from here: https://open.canada.ca/data/en/dataset/86af7918-c2ab-4f1a-ba83-94c9cebb0e6c)
+  haul_qc <- read.csv("data/fish_raw/BC/QCS_effort.csv")
+  haul_vi <- read.csv("data/fish_raw/BC/WCVI_effort.csv")
+  haul_hs <- read.csv("data/fish_raw/BC/HS_effort.csv")
+  haul_hg <- read.csv("data/fish_raw/BC/WCHG_effort.csv")
+  
+  #Combine BC bio and haul data to combine together
+  bio2 <- rbind(bio_hg, bio_hs, bio_qc, bio_vi)
+  haul2 <- rbind(haul_hg, haul_hs, haul_qc, haul_vi)
+  
+  #Merge the official BC bio data and the official BC haul data to get metadata (from here: https://open.canada.ca/data/en/dataset/86af7918-c2ab-4f1a-ba83-94c9cebb0e6c)
   bio2$Set.number <- bio2$Tow.number
   bio <- dplyr::left_join(bio2, haul2, relationship="many-to-many")
   
@@ -523,7 +533,7 @@ length_expand_bc <- function(sci_name) {
   dat <- dplyr::left_join(dat, filter(bio[,c("event_id", "age", "sex","length_cm", "weight", "scientific_name", "common_name")], !is.na(length_cm)), relationship = "many-to-many")
   
   # filter out species of interest from joined (catch/haul/bio) dataset
-  dat_sub = dplyr::filter(dat, sci_name==sci_name)
+  dat_sub = dplyr::filter(dat, scientific_name==sci_name)
   
   # fit length-weight regression by year to predict fish weights that have lengths only.
   # note a rank-deficiency warning may indicate there is insufficient data for some year/sex combinations (likely for unsexed group)
@@ -600,7 +610,7 @@ length_expand_bc <- function(sci_name) {
   return(all_hauls)
 }
 
-load_data_bc <- function(spc,dat.by.size, length=T) {
+load_data_bc <- function(sci_name,dat.by.size, length=T) {
   catch <- readRDS("data/fish_raw/BC/pbs-catch.rds")
   haul <- readRDS("data/fish_raw/BC/pbs-haul.rds")
   
@@ -652,8 +662,10 @@ load_data_bc <- function(spc,dat.by.size, length=T) {
   dat$longitude_dd <- dat$lon_start
   dat$latitude_dd <- dat$lat_start
   dat$year <- substr(dat$date, start=1, stop=4)
-  dat <- dplyr::select(dat, event_id, scientific_name, survey_name, year, longitude_dd, latitude_dd, cpue_kg_km2,
+  dat$project <- dat$survey_name
+  dat <- dplyr::select(dat, event_id, scientific_name, project, year, longitude_dd, latitude_dd, lon_start, lat_start, cpue_kg_km2,
                        depth_m, julian_day, pass, p1, p2, p3, p4)
+  dat <- filter(dat, !is.na(latitude_dd))
   
   
   # UTM transformation
@@ -661,11 +673,11 @@ load_data_bc <- function(spc,dat.by.size, length=T) {
   sp::coordinates(dat_ll) <- c("longitude_dd", "latitude_dd")
   sp::proj4string(dat_ll) <- sp::CRS("+proj=longlat +datum=WGS84")
   # convert to utm with spTransform
-  dat_utm = spTransform(dat_ll, 
-                        CRS("+proj=utm +zone=10 +datum=WGS84 +units=km"))
+  dat_utm = sp::spTransform(dat_ll, 
+                        sp::CRS("+proj=utm +zone=10 +datum=WGS84 +units=km"))
   # convert back from sp object to data frame
   dat = as.data.frame(dat_utm)
-  dat = dplyr::rename(dat, longitude = longitude_dd,
-                      latitude = latitude_dd)
+  dat = dplyr::rename(dat, longitude = coords.x1,
+                      latitude = coords.x2)
   return(dat)
 }
