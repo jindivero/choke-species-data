@@ -3,8 +3,6 @@ source("code/util_funs.R")
 library(ggplot2)
 library(readxl)
 
-library(ggplot2)
-
 #Specify species
 sci_name <- "anoplopoma fimbria" 
 spc <- "sablefish" 
@@ -56,6 +54,7 @@ years <- unique(dat_sub$year)
 nyrs <- length(years)
 nw_map <- cbind(world[rep(1:nrow(world), times=nyrs),],
                 year=rep(years, each=nrow(world)))
+
 ggplot() +
   geom_polygon(data = nw_map, aes(x=long, y=lat, group=group), colour="darkgrey",fill="grey", alpha=1) +
   coord_sf(xlim = c(-130,-120), ylim=c(31,50))+
@@ -69,32 +68,78 @@ ggplot() +
 
 
 ###Species catch data range availability###
-dat.by.size <- length_expand_nwfsc(spc)
+#Key
+sci_names <- c("gadus chalcogrammus", "anoplopoma fimbria", "microstomus pacificus", "eopsetta jordani", "gadus macrocephalus", "sebastolobus altivelis", "sebastolobus alascanus", "hippoglossus stenolepis", "gadus macrocephalus", "sebastes pinniger", "ophiodon elongatus", "sebastes crameri")
+spcs <- c("walleye pollock", "sablefish", "dover sole", "petrale sole", "pacific cod", "longspine thornyhead", "shortspine thornyhead", "pacific halibut", "pacific cod", "canary rockfish", "lingcod", "darkblotched rockfish")
+#1 walleye pollock, 2 sablefish, 3 dover sole, 4 petrale sole, 5, pacific cod, 6 longspine thornyhead, 7 shortspine thornyhead, 
+#8 pacific halibut, 9 pacific cod, 10 canary rockfish, 11 lingcod", 12 darkblotched rockfis
+
+#Specify species
+sci_name <-sci_names[3]
+spc <- spcs[3]
+
+dat.by.size <- length_expand_nwfsc(spc, sci_name)
 dat_nw <- load_data_nwfsc(spc = spc, dat.by.size = dat.by.size)
 
 dat.by.size <- length_expand_bc(sci_name)
 dat_bc <- load_data_bc(sci_name = sci_name, dat.by.size = dat.by.size)
 
-#dat.by.size <- length_expand_afsc(sci_name)
-#dat_afsc <- load_data_afsc(spc = sci_name, dat.by.size = dat.by.size)
-
-load("data/fish_raw/NOAA/afsc_haul.rda")
-haul <- afsc_haul
-load("data/fish_raw/NOAA/afsc_catch.rda")
-catch <- afsc_catch
-names(catch) = tolower(names(catch))
-names(haul) = tolower(names(haul))
-catch$scientific_name <- tolower(catch$scientific_name)
-dat_ak <- left_join(catch, haul, relationship="many-to-many")
-dat_ak <- filter(dat_ak, scientific_name== sci_name)
+dat.by.size <- length_expand_afsc(sci_name, years=T, region=T)
+dat_afsc <- load_data_afsc(sci_name = sci_name, dat.by.size = dat.by.size)
   
 iphc_halibut <- read_excel("~/Dropbox/choke species/code/choke-species-data/data/fish_raw/IPHC/IPHC_FISS_set_halibut.xlsx")
 
+#Bind together
+dat <- bind_rows(dat_nw, dat_bc, dat_afsc)
 
+#Calculate proportion of biomass of intermediate size
+dat$cpue_kg_km2a <- dat$cpue_kg_km2 * (dat$p2+dat$p3)
 #Make base map
 world <- map_data("world")
+#Remove background
+theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+      panel.background = element_blank(), axis.line = element_line(colour = "black"))
 #Map all together
 ggplot() +
   geom_polygon(data = world, aes(x=long, y=lat, group=group), colour="darkgrey",fill="grey", alpha=1) +
-  coord_sf(xlim = c(-180,-120), ylim=c(35,70))+
-  geom_point(data=haul, aes(x=lon_start, y=lat_start))
+  coord_sf(xlim = c(-180,-120), ylim=c(30,70))+
+  geom_point(data=dat, aes(x=long, y=lat))
+
+#Colour for bulk biomass
+ggplot() +
+  geom_polygon(data = world, aes(x=long, y=lat, group=group), colour="darkgrey",fill="grey", alpha=1) +
+  coord_sf(xlim = c(-180,-120), ylim=c(30,70))+
+  geom_point(data=dat, aes(x=long, y=lat, colour=log(cpue_kg_km2)+1), size=0.5)
+
+#Colour for size-expanded biomass
+ggplot() +
+  geom_polygon(data = world, aes(x=long, y=lat, group=group), colour="darkgrey",fill="grey", alpha=1) +
+  coord_sf(xlim = c(-180,-120), ylim=c(30,70))+
+  geom_point(data=dat, aes(x=long, y=lat, colour=log(cpue_kg_km2a)+1), size=0.5)
+
+#Only positive catches, size-expanded biomass
+ggplot() +
+  geom_polygon(data = world, aes(x=long, y=lat, group=group), colour="darkgrey",fill="grey", alpha=1) +
+  coord_sf(xlim = c(-180,-120), ylim=c(30,70))+
+  geom_point(data=filter(dat,cpue_kg_km2a>0), aes(x=long, y=lat, colour=log(cpue_kg_km2a)), size=0.5)
+
+#Only positive catches, bulk biomass
+ggplot() +
+  geom_polygon(data = world, aes(x=long, y=lat, group=group), colour="darkgrey",fill="grey", alpha=1) +
+  coord_sf(xlim = c(-180,-120), ylim=c(30,70))+
+  geom_point(data=filter(dat,cpue_kg_km2>0), aes(x=long, y=lat, colour=log(cpue_kg_km2)), size=0.5)
+
+#Positive catches by year
+ggplot() +
+  geom_polygon(data = world, aes(x=long, y=lat, group=group), colour="darkgrey",fill="grey", alpha=1) +
+  coord_sf(xlim = c(-180,-120), ylim=c(30,70))+
+  geom_point(data=filter(dat,cpue_kg_km2>0), aes(x=long, y=lat, colour=log(cpue_kg_km2)), size=0.5)+facet_wrap("year")
+
+ggplot() +
+  geom_polygon(data = world, aes(x=long, y=lat, group=group), colour="darkgrey",fill="grey", alpha=1) +
+  coord_sf(xlim = c(-180,-120), ylim=c(30,70))+
+  geom_point(data=filter(dat,cpue_kg_km2a>0), aes(x=long, y=lat, colour=log(cpue_kg_km2a)))+facet_wrap("year")
+
+#Length observations
+ggplot(dat, aes(x=nlength, group=project, fill=project))+geom_density()+facet_wrap("year")
+

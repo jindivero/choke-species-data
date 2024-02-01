@@ -1,3 +1,4 @@
+library(dplyr)
 #Get scientific name from itis number
 extract_name <- function(x){
   name <- x$name[14]
@@ -96,6 +97,7 @@ load_data_nwfsc <- function(spc,dat.by.size, length=T) {
   dat <- readRDS("data/fish_raw/NOAA/nwfsc_catch.rds")
   names(dat) = tolower(names(dat))
   dat.by.size$trawl_id <- as.character(dat.by.size$trawl_id)
+  dat$common_name <- tolower(dat$common_name)
   dat = dplyr::filter(dat, common_name == spc)
   dat <- left_join(dat, dat.by.size, by = "trawl_id")
   # remove tows where there was positive catch but no length measurements
@@ -118,9 +120,10 @@ load_data_nwfsc <- function(spc,dat.by.size, length=T) {
   # prepare data and models -------------------------------------------------
   dat$long <- dat$longitude_dd
   dat$lat <- dat$latitude_dd
-  dat <- dplyr::select(dat, trawl_id, common_name, project, vessel, tow, year, longitude_dd, latitude_dd, long, lat, cpue_kg_km2,
-                       depth_m, julian_day, pass, p1, p2, p3, p4)
-  
+  dat$event_id <- dat$trawl_id
+  dat$year <- as.character(dat$year)
+  dat <- dplyr::select(dat, event_id, common_name, project, vessel, tow, year, longitude_dd, latitude_dd, long, lat, cpue_kg_km2,
+                       depth_m, julian_day, nlength, pass, p1, p2, p3, p4)
   
   # UTM transformation
   dat_ll = dat
@@ -138,7 +141,7 @@ load_data_nwfsc <- function(spc,dat.by.size, length=T) {
 
 
 # Species of interest and max. juvenile lengths (define ontogenetic classes)
-length_expand_nwfsc <- function(spc) {
+length_expand_nwfsc <- function(spc, sci_name) {
   # load, clean, and join data
   bio <- readRDS("data/fish_raw/NOAA/nwfsc_bio.rds")
   load("data/fish_raw/NOAA/nwfsc_haul.rda")
@@ -167,19 +170,33 @@ length_expand_nwfsc <- function(spc) {
     dplyr::left_join(filter(bio[,c("trawl_id", "scientific_name", "common_name", "weight", "ageing_lab", "oto_id", "length_cm", "width_cm", "sex", "age")], !is.na(length_cm)), relationship = "many-to-many") %>%
     filter(performance == "Satisfactory")
   
-  
+  #Make all lowercase
+  dat$common_name <- tolower(dat$common_name)
   # filter out species of interest from joined (catch/haul/bio) dataset
   dat_sub = dplyr::filter(dat, common_name == spc)
   
+  #Add column counting number of length observations per catch
+  dat_sub$is_length <- ifelse(!is.na(dat_sub$length_cm), 1,0) 
+  dat_sub <- group_by(dat_sub, trawl_id) %>% mutate(nlength=sum(is_length)) %>% ungroup()
+  dat_sub$trawl_id <- as.numeric(dat_sub$trawl_id)
+  
   # fit length-weight regression by year to predict fish weights that have lengths only.
   # note a rank-deficiency warning may indicate there is insufficient data for some year/sex combinations (likely for unsexed group)
-
-  fitted = dat_sub
-  fitted <-  filter(fitted, !is.na(length_cm), !is.na(weight))%>%
-    # dplyr::select(trawl_id,year,
-    #               subsample_wt_kg, total_catch_wt_kg, area_swept_ha_der, cpue_kg_km2,
-    #               individual_tracking_id, sex, length_cm, weight) %>%
-   group_nest(year) %>%
+  #Create one set of data with only year/survey combinations with at least some weight data:
+  fitted <-  filter(dat_sub, !is.na(length_cm)) %>%
+    group_by(year) %>%
+    mutate(sum = sum(weight, na.rm=T)) %>%
+    filter(sum>0) %>%
+    ungroup()
+  #And one for those without any weight data:
+  not_fitted <-  filter(dat_sub, !is.na(length_cm)) %>%
+    group_by(year) %>%
+    mutate(sum = sum(weight, na.rm=T)) %>%
+    filter(sum==0) %>%
+    ungroup()
+  
+  fitted <-  
+   group_nest(fitted, year) %>%
     mutate(
       model = purrr::map(data, ~ lm(log(weight) ~ log(length_cm), data = .x)),
       tidied = purrr::map(model, broom::tidy),
@@ -188,10 +205,26 @@ length_expand_nwfsc <- function(spc) {
     )
   
   # replace missing weights with predicted weights
-  dat_pos = fitted %>%
+  dat_pos2 = fitted %>%
     tidyr::unnest(predictions) %>%
     dplyr::select(-data, -model, -tidied, -augmented) %>%
     dplyr::mutate(weight = ifelse(is.na(weight), exp(pred), weight))
+
+  dat_pos <- bind_rows(dat_pos2, not_fitted)
+  
+  
+  #If there is no weight data available to get weight-length empirical interpolation, use fishbase to fill in
+  # find length-weight relationship parameters for one species
+  pars <- rfishbase::length_weight(
+    #convert scientific name to first letter capitalized for fishbase
+    species_list = stringr::str_to_sentence(sci_name, locale = "en"))
+  #Get mean
+  a <- mean(pars$a)
+  b <- mean(pars$b)
+  #Calculate weight (and convert from g to kg)
+  dat_pos <- dplyr::mutate(dat_pos, weight = ifelse(is.na(weight), ((a*length_cm^b)*0.001), weight))
+  
+  
   
   trawlids <- unique(dat_pos$trawl_id)
   p <- data.frame(trawl_id = trawlids,
@@ -243,7 +276,9 @@ length_expand_nwfsc <- function(spc) {
   
   all_hauls <- rbind(p, absent.df)
   all_hauls$trawl_id <- as.numeric(all_hauls$trawl_id)
-  return(all_hauls)
+  nlengths <- unique(dat_sub[,c("trawl_id","nlength")])
+  all_hauls2 <- left_join(all_hauls, nlengths)
+  return(all_hauls2)
 }
 
 # Species of interest and max. juvenile lengths (define ontogenetic classes)
@@ -270,9 +305,6 @@ length_expand_afsc <- function(sci_name, years, region) {
   lengths <- dplyr::left_join(size, species)
   lengths <- dplyr::left_join(lengths, haul)
   
-  #Convert length to cm
-  lengths$length_cm <- lengths$length*0.1
-  
   #Expand to make separate row for each measurement
   lengths <- dplyr::filter(lengths, !is.na(frequency))
   lengths2 <- tidyr::uncount(lengths, weights=frequency)
@@ -281,11 +313,14 @@ length_expand_afsc <- function(sci_name, years, region) {
   bio <- dplyr::left_join(specimen, species)
   bio <- dplyr::left_join(bio, haul)
   
-  #Make cm
-  bio$length_cm <- bio$length*0.1
-  
   #Combine specimen and length data
   bio3 <- dplyr::bind_rows(bio, lengths)
+  
+  #Convert length from mm to cm
+  bio3$length_cm <- bio3$length*0.1
+  
+  #Convert weight from g to kg
+  bio3$weight <- bio3$weight*0.001
   
   #Combine catch data with species data
   names(catch2) <- tolower(names(catch2))
@@ -297,17 +332,22 @@ length_expand_afsc <- function(sci_name, years, region) {
   
   #Select only necessary columns for joining
   catch4 <- catch_sub[,c("hauljoin", "survey", "year", "depth_m", "latitude_dd_start", "longitude_dd_start", "cpue_kgkm2", "species_name", "common_name")]
-  bio4 <- dplyr::filter(bio_sub[,c("hauljoin", "species_name", "common_name", "length_cm", "weight", "sex", "age")], !is.na(length_cm))
+  bio4 <- dplyr::filter(bio_sub[,c("hauljoin", "performance", "species_name", "common_name", "length_cm", "weight", "sex", "age")], !is.na(length_cm))
   #Combine data
   dat <-dplyr::left_join(catch4, bio4, relationship = "many-to-many")
   dat <- dplyr::mutate(dat, trawl_id=hauljoin)
-  
-  #Performance metric?
+  #According to the codebook https://repository.library.noaa.gov/view/noaa/50147, 0 means Good performance, and the other numbers are for "Satisfactory, and then a "but"..."; negative numbers are Unsatisfactory
+  #Dataset already includes only Good and Satisfactory hauls, Unsatisfactory are removed
   
   #If years=T in the function, this will subset data to 1999 onward to remove possibly funky data prior to 1999
   if(years){
   dat_sub = dplyr::filter(dat, year>1998)
   }
+  
+  #Add column counting number of length observations per catch
+  dat_sub$is_length <- ifelse(!is.na(dat_sub$length_cm), 1,0) 
+  dat_sub <- group_by(dat_sub, trawl_id) %>% mutate(nlength=sum(is_length)) %>% ungroup()
+  dat_sub$trawl_id <- as.numeric(dat_sub$trawl_id)
   
   # fit length-weight regression by year to predict fish weights that have lengths only.
   # note a rank-deficiency warning may indicate there is insufficient data for some year/sex combinations (likely for unsexed group)
@@ -315,37 +355,85 @@ length_expand_afsc <- function(sci_name, years, region) {
   fitted = dat_sub
   #If region=T in function, this will do the length-weight regression for each broad geographic region (EBS, NBS, and GOA)
   if(region){
-  fitted <-  filter(fitted, !is.na(length_cm), !is.na(weight))%>%
     # dplyr::select(trawl_id,year,
     #               subsample_wt_kg, total_catch_wt_kg, area_swept_ha_der, cpue_kg_km2,
     #               individual_tracking_id, sex, length_cm, weight) %>%
-    group_nest(year,survey) %>%
+    
+  #Create one set of data with only year/survey combinations with at least some weight data:
+    fitted <-  filter(fitted, !is.na(length_cm)) %>%
+      group_by(year,survey) %>%
+      mutate(sum = sum(weight, na.rm=T)) %>%
+      filter(sum>0) %>%
+      ungroup()
+   #And one for those without any weight data:
+    not_fitted <-  filter(dat_sub, !is.na(length_cm)) %>%
+      group_by(year,survey) %>%
+      mutate(sum = sum(weight, na.rm=T)) %>%
+      filter(sum==0) %>%
+      ungroup()
+    
+  #Fit regression model for years with data
+    fitted <-
+    group_nest(fitted, year,survey) %>%
     mutate(
       model = purrr::map(data, ~ lm(log(weight) ~ log(length_cm), data = .x)),
       tidied = purrr::map(model, broom::tidy),
       augmented = purrr::map(model, broom::augment),
       predictions = purrr::map2(data, model, modelr::add_predictions)
     )
-    }
+  }
+
   #If region=F in function, this will do length-weight regression for all of Alaska combined
     if(!region){
-      fitted <-  filter(fitted, !is.na(length_cm), !is.na(weight))%>%
-        # dplyr::select(trawl_id,year,
-        #               subsample_wt_kg, total_catch_wt_kg, area_swept_ha_der, cpue_kg_km2,
-        #               individual_tracking_id, sex, length_cm, weight) %>%
-          group_nest(year) %>%
-            mutate(
-              model = purrr::map(data, ~ lm(log(weight) ~ log(length_cm), data = .x)),
-              tidied = purrr::map(model, broom::tidy),
-              augmented = purrr::map(model, broom::augment),
-              predictions = purrr::map2(data, model, modelr::add_predictions)
-            )
+      # dplyr::select(trawl_id,year,
+      #               subsample_wt_kg, total_catch_wt_kg, area_swept_ha_der, cpue_kg_km2,
+      #               individual_tracking_id, sex, length_cm, weight) %>%
+      
+      #Create one set of data with only year/survey combinations with at least some weight data:
+      fitted <-  filter(fitted, !is.na(length_cm)) %>%
+        group_by(year) %>%
+        mutate(sum = sum(weight, na.rm=T)) %>%
+        filter(sum>0) %>%
+        ungroup()
+      #And one for those without any weight data:
+      not_fitted <-  filter(dat_sub, !is.na(length_cm)) %>%
+        group_by(year,survey) %>%
+        mutate(sum = sum(weight, na.rm=T)) %>%
+        filter(sum==0) %>%
+        ungroup()
+      
+      #Fit regression model for years with data
+      fitted <-
+        group_nest(fitted, year) %>%
+        mutate(
+          model = purrr::map(data, ~ lm(log(weight) ~ log(length_cm), data = .x)),
+          tidied = purrr::map(model, broom::tidy),
+          augmented = purrr::map(model, broom::augment),
+          predictions = purrr::map2(data, model, modelr::add_predictions)
+        )
         }
-  # replace missing weights with predicted weights
-  dat_pos = fitted %>%
+  # replace missing weights with predicted weights for years with data
+  dat_pos2 = fitted %>%
     tidyr::unnest(predictions) %>%
     dplyr::select(-data, -model, -tidied, -augmented) %>%
     dplyr::mutate(weight = ifelse(is.na(weight), exp(pred), weight))
+  
+  #combine back with data for years without data
+  dat_pos <- bind_rows(dat_pos2, not_fitted)
+  
+  ##Checked that this works by checking number of rows--looks like it passes!
+  
+  #If there is no weight data available to get weight-length empirical interpolation, use fishbase to fill in
+  # find length-weight relationship parameters for one species
+   pars <- rfishbase::length_weight(
+    #convert scientific name to first letter capitalized for fishbase
+    species_list = stringr::str_to_sentence(sci_name, locale = "en"))
+   #Get mean
+   a <- mean(pars$a)
+   b <- mean(pars$b)
+   #Calculate weight (and convert from g to kg)
+   dat_pos <- dplyr::mutate(dat_pos, weight = ifelse(is.na(weight), ((a*length_cm^b)*0.001), weight))
+  #convert cm-g units
   
   #make column of trawl_id, which is called hauljoin originally in the AFSC data
   trawlids <- unique(dat_pos$trawl_id)
@@ -398,7 +486,10 @@ length_expand_afsc <- function(sci_name, years, region) {
   
   all_hauls <- rbind(p, absent.df)
   all_hauls$trawl_id <- as.numeric(all_hauls$trawl_id)
-  return(all_hauls)
+  #Add nlengths back
+  nlengths <- unique(dat_sub[,c("trawl_id","nlength")])
+  all_hauls2 <- left_join(all_hauls, nlengths)
+  return(all_hauls2)
 }
 
 load_data_afsc <- function(sci_name,dat.by.size, length=T) {
@@ -413,7 +504,7 @@ load_data_afsc <- function(sci_name,dat.by.size, length=T) {
     dat.by.size$trawl_id <- as.character(dat.by.size$trawl_id)
     dat$trawl_id <-as.character(dat$hauljoin)
     dat = dplyr::filter(dat, species_name ==sci_name)
-    dat <- left_join(dat, dat.by.size, by = "trawl_id")
+    dat <- dplyr::left_join(dat, dat.by.size, by = "trawl_id")
     # remove tows where there was positive catch but no length measurements
     if(length){
       dat <- dplyr::filter(dat, !is.na(p1))
@@ -444,8 +535,9 @@ load_data_afsc <- function(sci_name,dat.by.size, length=T) {
     dat$cpue_kg_km2 <- dat$cpue_kgkm2
     dat$project <- dat$survey
     dat$event_id <- dat$trawl_id
+    dat$year <- as.character(dat$year)
     dat <- dplyr::select(dat, event_id, common_name, scientific_name, project, year, bottom_temperature_c, longitude_dd, latitude_dd, long, lat, cpue_kg_km2,
-                         depth_m, julian_day, p1, p2, p3, p4)
+                         depth_m, julian_day, nlength, p1, p2, p3, p4)
     
     
     # UTM transformation
@@ -535,15 +627,30 @@ length_expand_bc <- function(sci_name) {
   # filter out species of interest from joined (catch/haul/bio) dataset
   dat_sub = dplyr::filter(dat, scientific_name==sci_name)
   
+  #Add column counting number of length observations per catch
+  dat_sub$is_length <- ifelse(!is.na(dat_sub$length_cm), 1,0) 
+  dat_sub <- group_by(dat_sub, event_id) %>% mutate(nlength=sum(is_length)) %>% ungroup()
+  dat_sub$event_id <- as.numeric(dat_sub$event_id)
+  
   # fit length-weight regression by year to predict fish weights that have lengths only.
   # note a rank-deficiency warning may indicate there is insufficient data for some year/sex combinations (likely for unsexed group)
   
-  fitted = dat_sub
-  fitted <-  filter(fitted, !is.na(length_cm), !is.na(weight))%>%
-    # dplyr::select(trawl_id,year,
-    #               subsample_wt_kg, total_catch_wt_kg, area_swept_ha_der, cpue_kg_km2,
-    #               individual_tracking_id, sex, length_cm, weight) %>%
-    group_nest(year) %>%
+  #Create one set of data with only year/survey combinations with at least some weight data:
+  fitted <-  filter(dat_sub, !is.na(length_cm)) %>%
+    group_by(year) %>%
+    mutate(sum = sum(weight, na.rm=T)) %>%
+    filter(sum>0) %>%
+    ungroup()
+  #And one for those without any weight data:
+  not_fitted <-  filter(dat_sub, !is.na(length_cm)) %>%
+    group_by(year) %>%
+    mutate(sum = sum(weight, na.rm=T)) %>%
+    filter(sum==0) %>%
+    ungroup()
+  
+  #Fit regression model for years with data
+  fitted <-
+    group_nest(fitted, year) %>%
     mutate(
       model = purrr::map(data, ~ lm(log(weight) ~ log(length_cm), data = .x)),
       tidied = purrr::map(model, broom::tidy),
@@ -552,10 +659,26 @@ length_expand_bc <- function(sci_name) {
     )
   
   # replace missing weights with predicted weights
-  dat_pos = fitted %>%
+  dat_pos2 = fitted %>%
     tidyr::unnest(predictions) %>%
     dplyr::select(-data, -model, -tidied, -augmented) %>%
     dplyr::mutate(weight = ifelse(is.na(weight), exp(pred), weight))
+  
+  #combine back with data for years without data
+  dat_pos <- bind_rows(dat_pos2, not_fitted)
+  
+  ##Checked that this works by checking number of rows--looks like it passes!
+  
+  #If there is no weight data available to get weight-length empirical interpolation, use fishbase to fill in
+  # find length-weight relationship parameters for one species
+  pars <- rfishbase::length_weight(
+    #convert scientific name to first letter capitalized for fishbase
+    species_list = stringr::str_to_sentence(sci_name, locale = "en"))
+  #Get mean
+  a <- mean(pars$a)
+  b <- mean(pars$b)
+  #Calculate weight (and convert from g to kg)
+  dat_pos <- dplyr::mutate(dat_pos, weight = ifelse(is.na(weight), ((a*length_cm^b)*0.001), weight))
   
   trawlids <- unique(dat_pos$event_id)
   p <- data.frame(event_id = trawlids,
@@ -607,7 +730,9 @@ length_expand_bc <- function(sci_name) {
   
   all_hauls <- rbind(p, absent.df)
   all_hauls$event_id <- as.numeric(all_hauls$event_id)
-  return(all_hauls)
+  nlengths <- unique(dat_sub[,c("event_id","nlength")])
+  all_hauls2 <- left_join(all_hauls, nlengths)
+  return(all_hauls2)
 }
 
 load_data_bc <- function(sci_name,dat.by.size, length=T) {
@@ -661,10 +786,14 @@ load_data_bc <- function(sci_name,dat.by.size, length=T) {
   dat$cpue_kg_km2 <- dat$catch_weight
   dat$longitude_dd <- dat$lon_start
   dat$latitude_dd <- dat$lat_start
+  dat$long <- dat$lon_start
+  dat$lat <- dat$lat_start
+  dat$event_id <- as.character(dat$event_id)
+  
   dat$year <- substr(dat$date, start=1, stop=4)
   dat$project <- dat$survey_name
-  dat <- dplyr::select(dat, event_id, scientific_name, project, year, longitude_dd, latitude_dd, lon_start, lat_start, cpue_kg_km2,
-                       depth_m, julian_day, pass, p1, p2, p3, p4)
+  dat <- dplyr::select(dat, event_id, scientific_name, project, year, longitude_dd, latitude_dd, long, lat, cpue_kg_km2,
+                       depth_m, julian_day, nlength, pass, p1, p2, p3, p4)
   dat <- filter(dat, !is.na(latitude_dd))
   
   
