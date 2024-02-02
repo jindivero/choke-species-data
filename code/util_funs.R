@@ -151,6 +151,8 @@ length_expand_nwfsc <- function(spc, sci_name) {
   names(bio) = tolower(names(bio))
   names(haul) = tolower(names(haul))
   bio$scientific_name <- tolower(bio$scientific_name)
+  bio$common_name <- tolower(bio$common_name)
+  catch$common_name <- tolower(catch$common_name)
   
   bio$trawl_id = as.character(bio$trawl_id)
   haul$trawl_id = as.character(haul$event_id)
@@ -170,10 +172,13 @@ length_expand_nwfsc <- function(spc, sci_name) {
     dplyr::left_join(filter(bio[,c("trawl_id", "scientific_name", "common_name", "weight", "ageing_lab", "oto_id", "length_cm", "width_cm", "sex", "age")], !is.na(length_cm)), relationship = "many-to-many") %>%
     filter(performance == "Satisfactory")
   
-  #Make all lowercase
-  dat$common_name <- tolower(dat$common_name)
   # filter out species of interest from joined (catch/haul/bio) dataset
   dat_sub = dplyr::filter(dat, common_name == spc)
+  
+  #Warning if species not present
+  if(nrow(dat_sub)==0){
+    warning("species not present in data")
+  }
   
   #Add column counting number of length observations per catch
   dat_sub$is_length <- ifelse(!is.na(dat_sub$length_cm), 1,0) 
@@ -188,6 +193,7 @@ length_expand_nwfsc <- function(spc, sci_name) {
     mutate(sum = sum(weight, na.rm=T)) %>%
     filter(sum>0) %>%
     ungroup()
+  fitted$weight <- ifelse(fitted$weight==0, NA, fitted$weight)
   #And one for those without any weight data:
   not_fitted <-  filter(dat_sub, !is.na(length_cm)) %>%
     group_by(year) %>%
@@ -208,7 +214,7 @@ length_expand_nwfsc <- function(spc, sci_name) {
   dat_pos2 = fitted %>%
     tidyr::unnest(predictions) %>%
     dplyr::select(-data, -model, -tidied, -augmented) %>%
-    dplyr::mutate(weight = ifelse(is.na(weight), exp(pred), weight))
+    try(dplyr::mutate(weight = ifelse(is.na(weight), exp(pred), weight)))
 
   dat_pos <- bind_rows(dat_pos2, not_fitted)
   
@@ -227,6 +233,9 @@ length_expand_nwfsc <- function(spc, sci_name) {
   
   
   trawlids <- unique(dat_pos$trawl_id)
+
+  if(length(trawlids!=0)){
+    
   p <- data.frame(trawl_id = trawlids,
                   p1 = 0,
                   p2 = 0,
@@ -279,6 +288,20 @@ length_expand_nwfsc <- function(spc, sci_name) {
   nlengths <- unique(dat_sub[,c("trawl_id","nlength")])
   all_hauls2 <- left_join(all_hauls, nlengths)
   return(all_hauls2)
+  }
+  
+  if(length(trawlids)==0){
+    trawlids <- unique(dat_sub$trawl_id)
+    absent.df <- data.frame(trawl_id = trawlids,
+                            p1 = 0,
+                            p2 = 0,
+                            p3 = 0,
+                            p4 = 0,
+                            nlength=0)
+    return(absent.df)
+    
+  }
+  
 }
 
 # Species of interest and max. juvenile lengths (define ontogenetic classes)
@@ -349,9 +372,15 @@ length_expand_afsc <- function(sci_name, years, region) {
   dat_sub <- group_by(dat_sub, trawl_id) %>% mutate(nlength=sum(is_length)) %>% ungroup()
   dat_sub$trawl_id <- as.numeric(dat_sub$trawl_id)
   
+  #Warning if no species present
+  if(nrow(dat_sub)==0){
+    warning("species not present in data")
+  }
+  
   # fit length-weight regression by year to predict fish weights that have lengths only.
   # note a rank-deficiency warning may indicate there is insufficient data for some year/sex combinations (likely for unsexed group)
   
+  if(nrow(dat_sub)>0){
   fitted = dat_sub
   #If region=T in function, this will do the length-weight regression for each broad geographic region (EBS, NBS, and GOA)
   if(region){
@@ -365,6 +394,10 @@ length_expand_afsc <- function(sci_name, years, region) {
       mutate(sum = sum(weight, na.rm=T)) %>%
       filter(sum>0) %>%
       ungroup()
+    
+    #Remove erroneous zero weight observations because cause error in lm()
+    fitted$weight <- ifelse(fitted$weight==0, NA, fitted$weight)
+    
    #And one for those without any weight data:
     not_fitted <-  filter(dat_sub, !is.na(length_cm)) %>%
       group_by(year,survey) %>%
@@ -373,6 +406,7 @@ length_expand_afsc <- function(sci_name, years, region) {
       ungroup()
     
   #Fit regression model for years with data
+    
     fitted <-
     group_nest(fitted, year,survey) %>%
     mutate(
@@ -416,7 +450,7 @@ length_expand_afsc <- function(sci_name, years, region) {
   dat_pos2 = fitted %>%
     tidyr::unnest(predictions) %>%
     dplyr::select(-data, -model, -tidied, -augmented) %>%
-    dplyr::mutate(weight = ifelse(is.na(weight), exp(pred), weight))
+    try(dplyr::mutate(weight = ifelse(is.na(weight), exp(pred), weight)))
   
   #combine back with data for years without data
   dat_pos <- bind_rows(dat_pos2, not_fitted)
@@ -431,12 +465,18 @@ length_expand_afsc <- function(sci_name, years, region) {
    #Get mean
    a <- mean(pars$a)
    b <- mean(pars$b)
+   #For longspine thornyhead, which is not in database for some reason, got these values from fishbase direct page
+   if(sci_name=="sebastolobus altivelis"){
+     a <- 0.00912
+     b=3.09
+   }
    #Calculate weight (and convert from g to kg)
    dat_pos <- dplyr::mutate(dat_pos, weight = ifelse(is.na(weight), ((a*length_cm^b)*0.001), weight))
   #convert cm-g units
   
   #make column of trawl_id, which is called hauljoin originally in the AFSC data
   trawlids <- unique(dat_pos$trawl_id)
+  if(length(trawlids!=0)){
   p <- data.frame(trawl_id = trawlids,
                   p1 = 0,
                   p2 = 0,
@@ -490,6 +530,19 @@ length_expand_afsc <- function(sci_name, years, region) {
   nlengths <- unique(dat_sub[,c("trawl_id","nlength")])
   all_hauls2 <- left_join(all_hauls, nlengths)
   return(all_hauls2)
+  }
+  }
+  if(length(trawlids)==0){
+    trawlids <- unique(dat_sub$trawl_id)
+    absent.df <- data.frame(trawl_id = trawlids,
+                            p1 = 0,
+                            p2 = 0,
+                            p3 = 0,
+                            p4 = 0,
+                            nlength=0)
+    return(absent.df)
+    
+  }
 }
 
 load_data_afsc <- function(sci_name,dat.by.size, length=T) {
@@ -627,6 +680,11 @@ length_expand_bc <- function(sci_name) {
   # filter out species of interest from joined (catch/haul/bio) dataset
   dat_sub = dplyr::filter(dat, scientific_name==sci_name)
   
+  if(nrow(dat_sub)==0){
+    warning("species not present in data")
+  }
+  
+  if(nrow(dat_sub)>0) {
   #Add column counting number of length observations per catch
   dat_sub$is_length <- ifelse(!is.na(dat_sub$length_cm), 1,0) 
   dat_sub <- group_by(dat_sub, event_id) %>% mutate(nlength=sum(is_length)) %>% ungroup()
@@ -641,6 +699,7 @@ length_expand_bc <- function(sci_name) {
     mutate(sum = sum(weight, na.rm=T)) %>%
     filter(sum>0) %>%
     ungroup()
+  fitted$weight <- ifelse(fitted$weight==0, NA, fitted$weight)
   #And one for those without any weight data:
   not_fitted <-  filter(dat_sub, !is.na(length_cm)) %>%
     group_by(year) %>%
@@ -662,7 +721,7 @@ length_expand_bc <- function(sci_name) {
   dat_pos2 = fitted %>%
     tidyr::unnest(predictions) %>%
     dplyr::select(-data, -model, -tidied, -augmented) %>%
-    dplyr::mutate(weight = ifelse(is.na(weight), exp(pred), weight))
+    try(dplyr::mutate(weight = ifelse(is.na(weight), exp(pred), weight)))
   
   #combine back with data for years without data
   dat_pos <- bind_rows(dat_pos2, not_fitted)
@@ -677,10 +736,16 @@ length_expand_bc <- function(sci_name) {
   #Get mean
   a <- mean(pars$a)
   b <- mean(pars$b)
+  #For longspine thornyhead, which is not in database for some reason, got these values from fishbase direct page
+  if(sci_name=="sebastolobus altivelis"){
+    a <- 0.00912
+    b=3.09
+  }
   #Calculate weight (and convert from g to kg)
   dat_pos <- dplyr::mutate(dat_pos, weight = ifelse(is.na(weight), ((a*length_cm^b)*0.001), weight))
   
   trawlids <- unique(dat_pos$event_id)
+  if(length(trawlids!=0)){
   p <- data.frame(event_id = trawlids,
                   p1 = 0,
                   p2 = 0,
@@ -733,6 +798,19 @@ length_expand_bc <- function(sci_name) {
   nlengths <- unique(dat_sub[,c("event_id","nlength")])
   all_hauls2 <- left_join(all_hauls, nlengths)
   return(all_hauls2)
+  }
+  }
+  if(length(trawlids)==0){
+    trawlids <- unique(dat_sub$trawl_id)
+    absent.df <- data.frame(trawl_id = trawlids,
+                            p1 = 0,
+                            p2 = 0,
+                            p3 = 0,
+                            p4 = 0,
+                            nlength=0)
+    return(absent.df)
+    
+  }
 }
 
 load_data_bc <- function(sci_name,dat.by.size, length=T) {

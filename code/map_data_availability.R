@@ -69,37 +69,72 @@ ggplot() +
 
 ###Species catch data range availability###
 #Key
-sci_names <- c("gadus chalcogrammus", "anoplopoma fimbria", "microstomus pacificus", "eopsetta jordani", "gadus macrocephalus", "sebastolobus altivelis", "sebastolobus alascanus", "hippoglossus stenolepis", "gadus macrocephalus", "sebastes pinniger", "ophiodon elongatus", "sebastes crameri")
-spcs <- c("walleye pollock", "sablefish", "dover sole", "petrale sole", "pacific cod", "longspine thornyhead", "shortspine thornyhead", "pacific halibut", "pacific cod", "canary rockfish", "lingcod", "darkblotched rockfish")
+sci_names <- c("gadus chalcogrammus", "anoplopoma fimbria", "microstomus pacificus", "eopsetta jordani", "gadus macrocephalus", "sebastolobus altivelis", "sebastolobus alascanus", "hippoglossus stenolepis", "sebastes pinniger", "ophiodon elongatus", "sebastes crameri", "oncorhynchus keta")
+spcs <- c("walleye pollock", "sablefish", "dover sole", "petrale sole", "pacific cod", "longspine thornyhead", "shortspine thornyhead", "pacific halibut", "canary rockfish", "lingcod", "darkblotched rockfish", "chum salmon")
 #1 walleye pollock, 2 sablefish, 3 dover sole, 4 petrale sole, 5, pacific cod, 6 longspine thornyhead, 7 shortspine thornyhead, 
-#8 pacific halibut, 9 pacific cod, 10 canary rockfish, 11 lingcod", 12 darkblotched rockfis
+#8 pacific halibut, 9 canary rockfish, 10 lingcod", 11 darkblotched rockfish, 12 chum salmon
 
 #Specify species
-sci_name <-sci_names[3]
-spc <- spcs[3]
+sci_name <-sci_names[12]
+spc <- spcs[12]
 
 dat.by.size <- length_expand_nwfsc(spc, sci_name)
-dat_nw <- load_data_nwfsc(spc = spc, dat.by.size = dat.by.size)
+dat_nw <- load_data_nwfsc(spc = spc, dat.by.size = dat.by.size, length=F)
 
 dat.by.size <- length_expand_bc(sci_name)
 dat_bc <- load_data_bc(sci_name = sci_name, dat.by.size = dat.by.size)
 
 dat.by.size <- length_expand_afsc(sci_name, years=T, region=T)
-dat_afsc <- load_data_afsc(sci_name = sci_name, dat.by.size = dat.by.size)
+dat_afsc <- load_data_afsc(sci_name = sci_name, dat.by.size = dat.by.size, length=F)
   
 iphc_halibut <- read_excel("~/Dropbox/choke species/code/choke-species-data/data/fish_raw/IPHC/IPHC_FISS_set_halibut.xlsx")
 
 #Bind together
-dat <- bind_rows(dat_nw, dat_bc, dat_afsc)
+dat <- bind_rows(dat_nw, dat_afsc)
 
 #Calculate proportion of biomass of intermediate size
 dat$cpue_kg_km2a <- dat$cpue_kg_km2 * (dat$p2+dat$p3)
 #Make base map
 world <- map_data("world")
 #Remove background
-theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-      panel.background = element_blank(), axis.line = element_line(colour = "black"))
-#Map all together
+#Map all together by year colored by bulk biomass
+ggplot() + ggtitle(spc)+
+  geom_polygon(data = world, aes(x=long, y=lat, group=group), colour="darkgrey",fill="grey", alpha=1) +
+  coord_sf(xlim = c(-180,-120), ylim=c(30,70))+
+  geom_point(data=filter(dat,cpue_kg_km2a>0), aes(x=long, y=lat, colour=log(cpue_kg_km2a)), size=0.2)+facet_wrap("year")+
+  theme(axis.text.x = element_text(angle = 30, hjust = 0.5, vjust = 0.5))+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), axis.line = element_line(colour = "black"))
+
+ggplot() + ggtitle(spc)+
+  geom_polygon(data = world, aes(x=long, y=lat, group=group), colour="darkgrey",fill="grey", alpha=1) +
+  coord_sf(xlim = c(-180,-120), ylim=c(30,70))+
+  geom_point(data=filter(dat,cpue_kg_km2>0), aes(x=long, y=lat, colour=log(cpue_kg_km2)), size=0.2)+facet_wrap("year")+
+  theme(axis.text.x = element_text(angle = 30, hjust = 0.5, vjust = 0.5))+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), axis.line = element_line(colour = "black"))
+
+#Save
+ggsave(
+  "figures/data_availability/chum_salmon.png",
+  plot = last_plot(),
+  device = NULL,
+  path = NULL,
+  scale = 1,
+  width = 8,
+  height = 8,
+  units = c("in"),
+  dpi = 600,
+  limitsize = TRUE
+)
+
+#How many observations have CPUE but no length data?
+test <- subset(dat, year>1998 &is.na(p1)&cpue_kg_km2>0)
+
+#Length observations
+ggplot(dat, aes(x=nlength, group=project, fill=project))+geom_density()+facet_wrap("year")
+
+###Other ways to map
 ggplot() +
   geom_polygon(data = world, aes(x=long, y=lat, group=group), colour="darkgrey",fill="grey", alpha=1) +
   coord_sf(xlim = c(-180,-120), ylim=c(30,70))+
@@ -135,11 +170,10 @@ ggplot() +
   coord_sf(xlim = c(-180,-120), ylim=c(30,70))+
   geom_point(data=filter(dat,cpue_kg_km2>0), aes(x=long, y=lat, colour=log(cpue_kg_km2)), size=0.5)+facet_wrap("year")
 
+#All catches by year
 ggplot() +
   geom_polygon(data = world, aes(x=long, y=lat, group=group), colour="darkgrey",fill="grey", alpha=1) +
   coord_sf(xlim = c(-180,-120), ylim=c(30,70))+
-  geom_point(data=filter(dat,cpue_kg_km2a>0), aes(x=long, y=lat, colour=log(cpue_kg_km2a)))+facet_wrap("year")
+  geom_point(data=dat, aes(x=long, y=lat), size=0.5)+facet_wrap("year")
 
-#Length observations
-ggplot(dat, aes(x=nlength, group=project, fill=project))+geom_density()+facet_wrap("year")
 
