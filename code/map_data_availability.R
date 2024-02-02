@@ -69,14 +69,19 @@ ggplot() +
 
 ###Species catch data range availability###
 #Key
-sci_names <- c("gadus chalcogrammus", "anoplopoma fimbria", "microstomus pacificus", "eopsetta jordani", "gadus macrocephalus", "sebastolobus altivelis", "sebastolobus alascanus", "hippoglossus stenolepis", "sebastes pinniger", "ophiodon elongatus", "sebastes crameri", "oncorhynchus keta")
-spcs <- c("walleye pollock", "sablefish", "dover sole", "petrale sole", "pacific cod", "longspine thornyhead", "shortspine thornyhead", "pacific halibut", "canary rockfish", "lingcod", "darkblotched rockfish", "chum salmon")
+sci_names <- c("gadus chalcogrammus", "anoplopoma fimbria", "microstomus pacificus", "eopsetta jordani", "gadus macrocephalus", "sebastolobus altivelis", "sebastolobus alascanus", "hippoglossus stenolepis", "sebastes pinniger", "ophiodon elongatus", "sebastes crameri", "oncorhynchus keta", "oncorhynchus tshawytscha", "oncorhynchus gorbuscha", "atheresthes stomias", "merluccius productus")
+spcs <- c("walleye pollock", "sablefish", "dover sole", "petrale sole", "pacific cod", "longspine thornyhead", "shortspine thornyhead", "pacific halibut", "canary rockfish", "lingcod", "darkblotched rockfish", "chum salmon", "chinook salmon", "pink salmon", "arrowtooth flounder", "pacific hake")
 #1 walleye pollock, 2 sablefish, 3 dover sole, 4 petrale sole, 5, pacific cod, 6 longspine thornyhead, 7 shortspine thornyhead, 
-#8 pacific halibut, 9 canary rockfish, 10 lingcod", 11 darkblotched rockfish, 12 chum salmon
+#8 pacific halibut, 9 canary rockfish, 10 lingcod", 11 darkblotched rockfish, 12 chum salmon, 13 chinook salmon, 14 pink salmon,
+#15 arrowtooth flounder, 16 pacific hake, 17, pacific ocean perch
+#Flathead sole, rex sole, southern rock sole
+#starry flounded
+#Rockfish: yellowtail, greenstriped, widow, bocaccio, rosethorn, sharpchin, canary, splitnose, redstripe, darkblotched, stripetail
+#Spotted ratfish
 
 #Specify species
-sci_name <-sci_names[12]
-spc <- spcs[12]
+sci_name <-sci_names[1]
+spc <- spcs[1]
 
 dat.by.size <- length_expand_nwfsc(spc, sci_name)
 dat_nw <- load_data_nwfsc(spc = spc, dat.by.size = dat.by.size, length=F)
@@ -90,7 +95,7 @@ dat_afsc <- load_data_afsc(sci_name = sci_name, dat.by.size = dat.by.size, lengt
 iphc_halibut <- read_excel("~/Dropbox/choke species/code/choke-species-data/data/fish_raw/IPHC/IPHC_FISS_set_halibut.xlsx")
 
 #Bind together
-dat <- bind_rows(dat_nw, dat_afsc)
+dat <- bind_rows(dat_nw, dat_bc,dat_afsc)
 
 #Calculate proportion of biomass of intermediate size
 dat$cpue_kg_km2a <- dat$cpue_kg_km2 * (dat$p2+dat$p3)
@@ -116,7 +121,7 @@ ggplot() + ggtitle(spc)+
 
 #Save
 ggsave(
-  "figures/data_availability/chum_salmon.png",
+  "figures/data_availability/pink_salmon.png",
   plot = last_plot(),
   device = NULL,
   path = NULL,

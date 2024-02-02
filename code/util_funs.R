@@ -293,10 +293,10 @@ length_expand_nwfsc <- function(spc, sci_name) {
   if(length(trawlids)==0){
     trawlids <- unique(dat_sub$trawl_id)
     absent.df <- data.frame(trawl_id = trawlids,
-                            p1 = 0,
-                            p2 = 0,
-                            p3 = 0,
-                            p4 = 0,
+                            p1 = NA,
+                            p2 = NA,
+                            p3 = NA,
+                            p4 = NA,
                             nlength=0)
     return(absent.df)
     
@@ -532,13 +532,14 @@ length_expand_afsc <- function(sci_name, years, region) {
   return(all_hauls2)
   }
   }
+  #If there are no hauls at all with any length measurements, do this instead (because caused an error in the kernel density function otherwise)
   if(length(trawlids)==0){
     trawlids <- unique(dat_sub$trawl_id)
     absent.df <- data.frame(trawl_id = trawlids,
-                            p1 = 0,
-                            p2 = 0,
-                            p3 = 0,
-                            p4 = 0,
+                            p1 = NA,
+                            p2 = NA,
+                            p3 = NA,
+                            p4 = NA,
                             nlength=0)
     return(absent.df)
     
@@ -803,10 +804,10 @@ length_expand_bc <- function(sci_name) {
   if(length(trawlids)==0){
     trawlids <- unique(dat_sub$trawl_id)
     absent.df <- data.frame(trawl_id = trawlids,
-                            p1 = 0,
-                            p2 = 0,
-                            p3 = 0,
-                            p4 = 0,
+                            p1 = NA,
+                            p2 =NA,
+                            p3 = NA,
+                            p4 = NA,
                             nlength=0)
     return(absent.df)
     
@@ -887,4 +888,191 @@ load_data_bc <- function(sci_name,dat.by.size, length=T) {
   dat = dplyr::rename(dat, longitude = coords.x1,
                       latitude = coords.x2)
   return(dat)
+}
+
+combine_all <- function(type){
+  #BC
+  #BC raw data
+  bio_qc <- read.csv("data/fish_raw/BC/QCS_biology.csv")
+  bio_vi <- read.csv("data/fish_raw/BC/WCVI_biology.csv")
+  bio_hs <- read.csv("data/fish_raw/BC/HS_biology.csv")
+  bio_hg <- read.csv("data/fish_raw/BC/WCHG_biology.csv")
+  
+  haul <- readRDS("data/fish_raw/BC/pbs-haul.rds")
+  catch <- readRDS("data/fish_raw/BC/pbs-catch.rds")
+  
+  haul_qc <- read.csv("data/fish_raw/BC/QCS_effort.csv")
+  haul_vi <- read.csv("data/fish_raw/BC/WCVI_effort.csv")
+  haul_hs <- read.csv("data/fish_raw/BC/HS_effort.csv")
+  haul_hg <- read.csv("data/fish_raw/BC/WCHG_effort.csv")
+  
+  #Combine BC bio and haul data to combine together
+  bio2 <- rbind(bio_hg, bio_hs, bio_qc, bio_vi)
+  haul2 <- rbind(haul_hg, haul_hs, haul_qc, haul_vi)
+  
+  #Merge the official BC bio data and the official BC haul data to get metadata (from here: https://open.canada.ca/data/en/dataset/86af7918-c2ab-4f1a-ba83-94c9cebb0e6c)
+  bio2$Set.number <- bio2$Tow.number
+  bio <- dplyr::left_join(bio2, haul2, relationship="many-to-many")
+  
+  names(bio) = tolower(names(bio))
+  names(haul) = tolower(names(haul))
+  
+  #Put bio data in the same format as the NOAA bio data
+  bio$scientific_name <- tolower(bio$scientific.name)
+  bio$common_name <- tolower(bio$english.common.name)
+  bio$weight <- bio$weight..g.*0.001
+  bio$length_cm <- bio$fork.length..mm.*0.1
+  bio$length_cm <- ifelse(is.na(bio$length_cm), (bio$total.length..mm.*0.1), bio$length_cm)
+  
+  #Make column names consistent so can join to surveyjoin haul data to get event_id
+  haul$year <- as.character(substr(haul$date, start=1, stop=4))
+  bio$year <- as.character(bio$survey.year)
+  haul$set.date <- substr(haul$date, start=1, stop=10)
+  bio$lat_start <- bio$start.latitude
+  bio$lat_end <- bio$end.latitude
+  bio$lon_start <- bio$start.longitude
+  bio$lon_end <- bio$end.longitude
+  
+  #Combine BC bio data and haul metadata with surveyjoin metadata
+  bio3 <- dplyr::left_join(bio[,c("age", "sex", "length_cm", "weight", "scientific_name", "common_name", "lat_start", "lon_start", "lat_end", "lon_end", "set.date")], haul, relationship="many-to-many")
+  bio <- bio3
+  
+  #Clean catch data
+  names(catch) = tolower(names(catch))
+  #Function to get scientific name from ITIS info
+  extract_name <- function(x){
+    name <- x$name[14]
+    return(name)
+  }
+  #Pull and extract ITIS info to get species names
+  itis <- unique(catch$itis)
+  scientific_names <-  taxize::classification(itis, db="itis")
+  itis <- as.data.frame(itis)
+  names <-lapply(scientific_names, extract_name)
+  names <- unlist(names)
+  itis$scientific_name <- tolower(names)
+  catch <- dplyr::left_join(catch,itis)
+  
+  #haul$sampling_end_hhmmss = as.numeric(haul$sampling_end_hhmmss)
+  #haul$sampling_start_hhmmss = as.numeric(haul$sampling_start_hhmmss)
+  
+  #Combine catch data with haul data
+  dat_bc <- dplyr::left_join(catch, haul, relationship = "many-to-many")
+  #Combine bio/haul data with catch data
+  #Only positive catches
+  dat_bc <- subset(dat_bc, catch_weight>0)
+  dat_bc$cpue_kg_km2 <- dat_bc$catch_weight
+  #Biomass
+  if(type=="hauls"){
+  counts_bc <- aggregate(cpue_kg_km2~scientific_name, dat_bc, FUN=length)
+  }
+  if(type=="biomass"){
+    counts_bc <- aggregate(cpue_kg_km2~scientific_name, dat_bc, FUN=sum)
+  }
+   #Add common name
+  counts_bc <- unique(dplyr::left_join(counts_bc, bio[,c("scientific_name", "common_name")]))
+  counts_bc <- dplyr::mutate(counts_bc, bc=cpue_kg_km2)
+  counts_bc$cpue_kg_km2 <- NULL
+  rm(list=setdiff(ls(), "counts_bc"))
+  
+#NWFSC
+  # load, clean, and join data
+  bio <- readRDS("data/fish_raw/NOAA/nwfsc_bio.rds")
+  load("data/fish_raw/NOAA/nwfsc_haul.rda")
+  haul <- nwfsc_haul
+  catch <- readRDS("data/fish_raw/NOAA/nwfsc_catch.rds")
+  names(catch) = tolower(names(catch))
+  names(bio) = tolower(names(bio))
+  names(haul) = tolower(names(haul))
+  bio$scientific_name <- tolower(bio$scientific_name)
+  bio$common_name <- tolower(bio$common_name)
+  catch$common_name <- tolower(catch$common_name)
+  
+  bio$trawl_id = as.character(bio$trawl_id)
+  haul$trawl_id = as.character(haul$event_id)
+  catch$trawl_id=as.character(catch$trawl_id)
+  haul$year <- as.character(substr(haul$date, start=1, stop=4))
+  bio$year <- as.character(bio$year)
+  catch$date <- NULL
+  bio$date <- NULL
+  bio$year <- NULL
+  
+  #haul$sampling_end_hhmmss = as.numeric(haul$sampling_end_hhmmss)
+  #haul$sampling_start_hhmmss = as.numeric(haul$sampling_start_hhmmss)
+  
+  #Combine data
+  dat = dplyr::left_join(catch[,c("trawl_id","common_name", "subsample_count","area_swept_ha","longitude_dd", "latitude_dd",
+                                  "subsample_wt_kg","total_catch_numbers","total_catch_wt_kg","cpue_kg_km2")], haul, relationship = "many-to-many") %>%
+    dplyr::left_join(filter(bio[,c("trawl_id", "scientific_name", "common_name", "weight", "ageing_lab", "oto_id", "length_cm", "width_cm", "sex", "age")], !is.na(length_cm)), relationship = "many-to-many") %>%
+    filter(performance == "Satisfactory")
+
+#Only positive catches
+dat_nw <- subset(dat, cpue_kg_km2>0)
+#Biomass
+if(type=="hauls"){
+  counts_nw <- aggregate(cpue_kg_km2~scientific_name, dat_nw, FUN=length)
+}
+if(type=="biomass"){
+  counts_nw <- aggregate(cpue_kg_km2~scientific_name, dat_nw, FUN=sum)
+}
+counts_nw <- unique(left_join(counts_nw, bio[,c("scientific_name", "common_name")]))
+counts_nw <- dplyr::mutate(counts_nw, nw=cpue_kg_km2)
+counts_nw$cpue_kg_km2 <- NULL
+
+rm(list=setdiff(ls(), c("counts_bc", "counts_nw")))
+
+##Alaska
+bio2 <-readRDS("data/fish_raw/NOAA/ak_bts_goa_ebs_nbs_all_levels.RDS")
+catch2 <- readRDS("data/fish_raw/NOAA/ak_bts_goa_ebs_nbs_cpue_zerofilled.RDS")
+
+#Isolate necessary parts of full data to get specimen weights/lengths per haul
+haul <- bio2$haul
+specimen <- bio2$specimen
+species <- bio2$species
+size <- bio2$size
+
+#make lowercase
+names(haul) <- tolower(names(haul))
+names(specimen) <- tolower(names(specimen))
+names(species) <- tolower(names(species))
+names(size) <- tolower(names(bio2$size))
+
+species$species_name <- tolower(species$species_name)
+
+#Combine catch data with species data
+names(catch2) <- tolower(names(catch2))
+catch <- dplyr::left_join(catch2, species)
+
+#Select only necessary columns for joining
+catch4 <- catch[,c("hauljoin", "survey", "year", "depth_m", "latitude_dd_start", "longitude_dd_start", "cpue_kgkm2", "species_name", "common_name")]
+dat <- dplyr::filter(catch4, year>1998)
+#bio4 <- dplyr::filter(bio4, year>1998)
+
+#Combine data
+dat <- dplyr::mutate(dat, trawl_id=hauljoin)
+#According to the codebook https://repository.library.noaa.gov/view/noaa/50147, 0 means Good performance, and the other numbers are for "Satisfactory, and then a "but"..."; negative numbers are Unsatisfactory
+#Dataset already includes only Good and Satisfactory hauls, Unsatisfactory are removed
+
+#Only positive catches
+dat$cpue_kg_km2 <- dat$cpue_kgkm2
+dat_ak <- subset(dat, cpue_kg_km2>0)
+dat_ak$scientific_name <- dat_ak$species_name
+#Biomass
+if(type=="hauls"){
+  counts_ak <- aggregate(cpue_kg_km2~scientific_name, dat_ak, FUN=length)
+}
+if(type=="biomass"){
+  counts_ak <- aggregate(cpue_kg_km2~scientific_name, dat_ak, FUN=sum)
+}
+counts_ak <- dplyr::mutate(counts_ak, ak=cpue_kg_km2)
+counts_ak$cpue_kg_km2 <- NULL
+counts_ak <- dplyr::left_join(counts_ak, species[,c("common_name", "species_name")], by=c("scientific_name"="species_name"))
+counts_ak$common_name <- tolower(counts_ak$common_name)
+
+#counts_ak <- unique(left_join(counts_nw, bio4[,c("scientific_name", "common_name")]))
+
+#Combine
+counts <- full_join(counts_nw, counts_bc)
+counts <- full_join(counts, counts_ak)
+return(counts)
 }
