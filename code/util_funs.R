@@ -969,6 +969,7 @@ combine_all <- function(type){
   if(type=="biomass"){
     counts_bc <- aggregate(cpue_kg_km2~scientific_name, dat_bc, FUN=sum)
   }
+  
    #Add common name
   counts_bc <- unique(dplyr::left_join(counts_bc, bio[,c("scientific_name", "common_name")]))
   counts_bc <- dplyr::mutate(counts_bc, bc=cpue_kg_km2)

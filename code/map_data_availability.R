@@ -69,19 +69,19 @@ ggplot() +
 
 ###Species catch data range availability###
 #Key
-sci_names <- c("gadus chalcogrammus", "anoplopoma fimbria", "microstomus pacificus", "eopsetta jordani", "gadus macrocephalus", "sebastolobus altivelis", "sebastolobus alascanus", "hippoglossus stenolepis", "sebastes pinniger", "ophiodon elongatus", "sebastes crameri", "oncorhynchus keta", "oncorhynchus tshawytscha", "oncorhynchus gorbuscha", "atheresthes stomias", "merluccius productus")
-spcs <- c("walleye pollock", "sablefish", "dover sole", "petrale sole", "pacific cod", "longspine thornyhead", "shortspine thornyhead", "pacific halibut", "canary rockfish", "lingcod", "darkblotched rockfish", "chum salmon", "chinook salmon", "pink salmon", "arrowtooth flounder", "pacific hake")
+sci_names <- c("gadus chalcogrammus", "anoplopoma fimbria", "microstomus pacificus", "eopsetta jordani", "gadus macrocephalus", "sebastolobus altivelis", "sebastolobus alascanus", "hippoglossus stenolepis", "sebastes pinniger", "ophiodon elongatus", "sebastes crameri", "oncorhynchus keta", "oncorhynchus tshawytscha", "oncorhynchus gorbuscha", "atheresthes stomias", "merluccius productus", "sebastes entomelas", "squalus suckleyi")
+spcs <- c("walleye pollock", "sablefish", "dover sole", "petrale sole", "pacific cod", "longspine thornyhead", "shortspine thornyhead", "pacific halibut", "canary rockfish", "lingcod", "darkblotched rockfish", "chum salmon", "chinook salmon", "pink salmon", "arrowtooth flounder", "pacific hake", "widow rockfish", "pacific spiny dogfish")
 #1 walleye pollock, 2 sablefish, 3 dover sole, 4 petrale sole, 5, pacific cod, 6 longspine thornyhead, 7 shortspine thornyhead, 
 #8 pacific halibut, 9 canary rockfish, 10 lingcod", 11 darkblotched rockfish, 12 chum salmon, 13 chinook salmon, 14 pink salmon,
-#15 arrowtooth flounder, 16 pacific hake, 17, pacific ocean perch
+#15 arrowtooth flounder, 16 pacific hake, 17 widow rockfish, 18 pacific spiny dogfish
 #Flathead sole, rex sole, southern rock sole
 #starry flounded
 #Rockfish: yellowtail, greenstriped, widow, bocaccio, rosethorn, sharpchin, canary, splitnose, redstripe, darkblotched, stripetail
 #Spotted ratfish
 
 #Specify species
-sci_name <-sci_names[1]
-spc <- spcs[1]
+sci_name <-sci_names[18]
+spc <- spcs[18]
 
 dat.by.size <- length_expand_nwfsc(spc, sci_name)
 dat_nw <- load_data_nwfsc(spc = spc, dat.by.size = dat.by.size, length=F)
@@ -121,7 +121,7 @@ ggplot() + ggtitle(spc)+
 
 #Save
 ggsave(
-  "figures/data_availability/pink_salmon.png",
+  "figures/data_availability/spiny dogfish.png",
   plot = last_plot(),
   device = NULL,
   path = NULL,
