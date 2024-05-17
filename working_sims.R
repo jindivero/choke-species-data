@@ -1,5 +1,44 @@
+
+#Function to run sdmTMB for one model, 
+run_sdmTMB <- function(dat,formula, start){
+
+  # make spde
+  spde <- make_mesh(dat,xy_cols = c('longitude','latitude'), 
+                    cutoff = 20)
+  
+  print('running model.')
+  m <- try( sdmTMB(
+    formula = as.formula(formula),
+    data = dat, 
+    spatial = "on",
+    mesh=mesh,
+    anisotropy=T,
+    reml=F,
+    time=NULL,
+    family =tweedie(link="log"),
+    extra_time=1980:2100),
+    control = sdmTMBcontrol(
+      start = list(b_threshold = start))
+  )
+    
+  if(class(m)=="try-error"){
+    print(paste("Error."))
+  }else{
+    print(paste("Model for",spp,"complete."))
+  }
+  
+  # return(m)
+  return(m)
+}
+
+
+
+
+
+
+
 run_models <- function(dat, mesh) {
-  null <- try(sdmTMB(dat ~ -1+year+log_depth_scaled+log_depth_scaled2, 
+  null <- try(sdmTMB(cpue_kg_km2 ~ -1+year+log_depth_scaled+log_depth_scaled2, 
                      data = dat, 
                      spatial = "on",
                      mesh=mesh,
@@ -8,11 +47,12 @@ run_models <- function(dat, mesh) {
                      time=NULL,
                      family =tweedie(link="log"),
                      extra_time=1980:2100),
-              control = sdmTMBcontrol(
-                newton_loops = 2,
+                    control = sdmTMBcontrol(
+                    start = list(b_threshold = start),
+                    newton_loops = 2,
               )))
 print(paste("running breakpt(po2)"))
-bp_o2 <- try(sdmTMB(sim ~ 1+year+breakpt(po2_s)+log_depth_scaled+log_depth_scaled2, 
+bp_o2 <- try(sdmTMB(cpue_kg_km2 ~ 1+year+breakpt(po2_s)+log_depth_scaled+log_depth_scaled2, 
                     data = dat,
                     time = NULL,
                     reml = F,
@@ -27,7 +67,7 @@ bp_o2 <- try(sdmTMB(sim ~ 1+year+breakpt(po2_s)+log_depth_scaled+log_depth_scale
                     #newton_loops = 2
 ))
 print(paste("running logistic(po2)"))
-log_o2 <- try(sdmTMB(sim ~ 1+year+logistic2(po2_s)+log_depth_scaled+log_depth_scaled2, 
+log_o2 <- try(sdmTMB(cpue_kg_km2 ~ 1+year+logistic2(po2_s)+log_depth_scaled+log_depth_scaled2, 
                      data = dat,
                      time = NULL,
                      reml = F,
@@ -42,7 +82,7 @@ log_o2 <- try(sdmTMB(sim ~ 1+year+logistic2(po2_s)+log_depth_scaled+log_depth_sc
                      #newton_loops = 2
 ))
 print(paste("running breakpt(mi1)"))
-bp_mi1 <- try(sdmTMB(sim ~ -1+year+breakpt(mi)+log_depth_scaled+log_depth_scaled2, 
+bp_mi1 <- try(sdmTMB(cpue_kg_km2 ~ -1+year+breakpt(mi)+log_depth_scaled+log_depth_scaled2, 
                      data = dat, 
                      time = NULL,
                      reml = F,
@@ -56,7 +96,7 @@ bp_mi1 <- try(sdmTMB(sim ~ -1+year+breakpt(mi)+log_depth_scaled+log_depth_scaled
                 newton_loops = 2,
                 nlminb_loops=2)))
 print(paste("running breakpt(mi2)"))
-bp_mi2 <- try(sdmTMB(sim ~ -1+year+breakpt(mi2)+log_depth_scaled+log_depth_scaled2, 
+bp_mi2 <- try(sdmTMB(cpue_kg_km2 ~ -1+year+breakpt(mi2)+log_depth_scaled+log_depth_scaled2, 
                      data = dat, 
                      time = NULL,
                      reml = F,
@@ -70,7 +110,7 @@ bp_mi2 <- try(sdmTMB(sim ~ -1+year+breakpt(mi2)+log_depth_scaled+log_depth_scale
                 newton_loops = 2,
                 nlminb_loops=2)))
 print(paste("running breakpt(mi3)"))
-bp_mi3 <- try(sdmTMB(sim ~ -1+year+breakpt(mi3)+log_depth_scaled+log_depth_scaled2, 
+bp_mi3 <- try(sdmTMB(cpue_kg_km2 ~ -1+year+breakpt(mi3)+log_depth_scaled+log_depth_scaled2, 
                      data = dat, 
                      time = NULL,
                      reml = F,
@@ -84,7 +124,7 @@ bp_mi3 <- try(sdmTMB(sim ~ -1+year+breakpt(mi3)+log_depth_scaled+log_depth_scale
                 newton_loops = 2,
                 nlminb_loops=2)))
 print(paste("running logistic(mi1)"))
-log_mi1 <- try(sdmTMB(sim ~ -1+year+logistic2(mi1)+log_depth_scaled+log_depth_scaled2, 
+log_mi1 <- try(sdmTMB(cpue_kg_km2 ~ -1+year+logistic2(mi1)+log_depth_scaled+log_depth_scaled2, 
                       data = dat, 
                       time = NULL,
                       reml = F,
@@ -98,7 +138,7 @@ log_mi1 <- try(sdmTMB(sim ~ -1+year+logistic2(mi1)+log_depth_scaled+log_depth_sc
                  newton_loops = 2,
                  nlminb_loops=2)))
 print(paste("running logistic (mi2)"))
-log_mi2 <- try(sdmTMB(sim ~ -1+year+logistic2(mi2)+log_depth_scaled+log_depth_scaled2, 
+log_mi2 <- try(sdmTMB(cpue_kg_km2 ~ -1+year+logistic2(mi2)+log_depth_scaled+log_depth_scaled2, 
                       data = dat, 
                       time = NULL,
                       reml = F,
@@ -112,7 +152,7 @@ log_mi2 <- try(sdmTMB(sim ~ -1+year+logistic2(mi2)+log_depth_scaled+log_depth_sc
                  newton_loops = 2,
                  nlminb_loops=2)))
 print(paste("running logistic (mi3)"))
-log_mi3 <- try(sdmTMB(sim ~ -1+year+logistic2(mi3)+log_depth_scaled+log_depth_scaled2, 
+log_mi3 <- try(sdmTMB(cpue_kg_km2 ~ -1+year+logistic2(mi3)+log_depth_scaled+log_depth_scaled2, 
                       data = dat, 
                       time = NULL,
                       reml = F,
@@ -126,7 +166,7 @@ log_mi3 <- try(sdmTMB(sim ~ -1+year+logistic2(mi3)+log_depth_scaled+log_depth_sc
                  newton_loops = 2,
                  nlminb_loops=2)))
 print(paste("running temp"))
-temp <- try(sdmTMB(sim ~ -1+year+log_depth_scaled+log_depth_scaled2+temp_s,
+temp <- try(sdmTMB(cpue_kg_km2~ -1+year+log_depth_scaled+log_depth_scaled2+temp_s,
                  data = dat, 
                  spatial = "on",
                  mesh=mesh,
@@ -139,7 +179,7 @@ temp <- try(sdmTMB(sim ~ -1+year+log_depth_scaled+log_depth_scaled2+temp_s,
             newton_loops = 1,
           )))
 print(paste("running o2"))
-po2 <- try(sdmTMB(sim ~ -1+year+log_depth_scaled+log_depth_scaled2+po2_s,
+po2 <- try(sdmTMB(cpue_kg_km2 ~ -1+year+log_depth_scaled+log_depth_scaled2+po2_s,
                  data = dat, 
                  spatial = "on",
                  mesh=mesh,
@@ -151,7 +191,7 @@ po2 <- try(sdmTMB(sim ~ -1+year+log_depth_scaled+log_depth_scaled2+po2_s,
           control = sdmTMBcontrol(newton_loops = 1,
           )))
 print(paste("running temp o2"))
-temp_o2 <- try(sdmTMB(sim ~ -1+year+log_depth_scaled+log_depth_scaled2+temp_s + po2_s,
+temp_o2 <- try(sdmTMB(cpue_kg_km2 ~ -1+year+log_depth_scaled+log_depth_scaled2+temp_s + po2_s,
                  data = dat, 
                  spatial = "on",
                  mesh=mesh,
@@ -163,7 +203,7 @@ temp_o2 <- try(sdmTMB(sim ~ -1+year+log_depth_scaled+log_depth_scaled2+temp_s + 
           control = sdmTMBcontrol(newton_loops = 1,
           )))
 print(paste("running temp o2 interaction"))
-temp_o2_int <- try(sdmTMB(sim ~ -1+year+log_depth_scaled+log_depth_scaled2+temp_s * po2_s,
+temp_o2_int <- try(sdmTMB(cpue_kg_km2 ~ -1+year+log_depth_scaled+log_depth_scaled2+temp_s * po2_s,
                  data = dat, 
                  spatial = "on",
                  mesh=mesh,
@@ -182,7 +222,9 @@ return(model_fits)
 
 
 
+##Functions to get summary tables
 
+#4
 
 
 

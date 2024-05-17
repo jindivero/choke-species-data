@@ -6,10 +6,29 @@ install.packages("rfishbase")
 library(rfishbase)
 install.packages("gsw")
 library(gsw)
+
 #Get scientific name from itis number
 extract_name <- function(x){
-  name <- x$name[14]
+  last_row <- x[nrow(x), ]
+  name <- last_row$name
   return(name)
+}
+
+#Pull and extract ITIS info to get species names
+itis_extract <- function(catch){ #catch is dataframe with the itis numbers
+itis <- unique(catch$itis)
+
+scientific_names <-  taxize::classification(itis, db="itis")
+itis <- as.data.frame(itis)
+names <-lapply(scientific_names, extract_name)
+names <- unlist(names)
+itis$scientific_name <- tolower(names)
+}
+
+print_species <- function(type){
+  biomass <- combine_all(type)
+  species <- biomass[1:2]
+  return(species)
 }
 
 load_all_hauls <- function() {
@@ -596,6 +615,7 @@ length_expand_bc <- function(sci_name, spc) {
   bio_vi <- read.csv("data/fish_raw/BC/WCVI_biology.csv")
   bio_hs <- read.csv("data/fish_raw/BC/HS_biology.csv")
   bio_hg <- read.csv("data/fish_raw/BC/WCHG_biology.csv")
+  itis  <- readRDS("data/fish_raw/BC/itis_bc.rds")
   
   haul <- readRDS("data/fish_raw/BC/pbs-haul.rds")
   catch <- readRDS("data/fish_raw/BC/pbs-catch.rds")
@@ -638,19 +658,8 @@ length_expand_bc <- function(sci_name, spc) {
   
   #Clean catch data
   names(catch) = tolower(names(catch))
-  #Function to get scientific name from ITIS info
-  extract_name <- function(x){
-    name <- x$name[14]
-    return(name)
-  }
-  #Pull and extract ITIS info to get species names
-  itis <- unique(catch$itis)
-  
-  scientific_names <-  taxize::classification(itis, db="itis")
-  itis <- as.data.frame(itis)
-  names <-lapply(scientific_names, extract_name)
-  names <- unlist(names)
-  itis$scientific_name <- tolower(names)
+
+  #Merge with ITIS information to get scientific name
   catch <- left_join(catch,itis)
   
   #haul$sampling_end_hhmmss = as.numeric(haul$sampling_end_hhmmss)
@@ -801,21 +810,11 @@ length_expand_bc <- function(sci_name, spc) {
 load_data_bc <- function(sci_name,dat.by.size, length=T, spc) {
   catch <- readRDS("data/fish_raw/BC/pbs-catch.rds")
   haul <- readRDS("data/fish_raw/BC/pbs-haul.rds")
+  itis  <- readRDS("data/fish_raw/BC/itis_bc.rds")
   
   #Clean catch data
   names(catch) = tolower(names(catch))
-  #Function to get scientific name from ITIS info
-  extract_name <- function(x){
-    name <- x$name[14]
-    return(name)
-  }
-  #Pull and extract ITIS info to get species names
-  itis <- unique(catch$itis)
-  scientific_names <-  taxize::classification(itis, db="itis")
-  itis <- as.data.frame(itis)
-  names <-lapply(scientific_names, extract_name)
-  names <- unlist(names)
-  itis$scientific_name <- tolower(names)
+
   catch <- left_join(catch,itis)
   
   #haul$sampling_end_hhmmss = as.numeric(haul$sampling_end_hhmmss)
@@ -882,6 +881,7 @@ combine_all <- function(type){
   bio_vi <- read.csv("data/fish_raw/BC/WCVI_biology.csv")
   bio_hs <- read.csv("data/fish_raw/BC/HS_biology.csv")
   bio_hg <- read.csv("data/fish_raw/BC/WCHG_biology.csv")
+  itis  <- readRDS("data/fish_raw/BC/itis_bc.rds")
   
   haul <- readRDS("data/fish_raw/BC/pbs-haul.rds")
   catch <- readRDS("data/fish_raw/BC/pbs-catch.rds")
@@ -924,18 +924,7 @@ combine_all <- function(type){
   
   #Clean catch data
   names(catch) = tolower(names(catch))
-  #Function to get scientific name from ITIS info
-  extract_name <- function(x){
-    name <- x$name[14]
-    return(name)
-  }
-  #Pull and extract ITIS info to get species names
-  itis <- unique(catch$itis)
-  scientific_names <-  taxize::classification(itis, db="itis")
-  itis <- as.data.frame(itis)
-  names <-lapply(scientific_names, extract_name)
-  names <- unlist(names)
-  itis$scientific_name <- tolower(names)
+
   catch <- dplyr::left_join(catch,itis)
   
   #haul$sampling_end_hhmmss = as.numeric(haul$sampling_end_hhmmss)
@@ -1118,10 +1107,10 @@ calc_po2_sat <- function(salinity, temp, depth, oxygen, lat, long, umol_m3, ml_L
    #1 L of water = 1 kg of water, so no equation needed?? Right??
    o2_umolkg <- umol_l * 1/1
   
-   #this is for if using data that has oxygen in ml/L
-  #SA = gsw_SA_from_SP(salinity,depth,long,lat) #absolute salinity for pot T calc
-  #pt = gsw_pt_from_t(SA,temp,depth) #potential temp at a particular depth
+  SA = gsw_SA_from_SP(salinity,depth,long,lat) #absolute salinity for pot T calc
+  pt = gsw_pt_from_t(SA,temp,depth) #potential temp at a particular depth
   #CT = gsw_CT_from_t(SA,temp,depth) #conservative temp
+  #this is for if using data that has oxygen in ml/L
   #sigma0 = gsw_sigma0(SA,CT)
  # o2_umolkg = oxygen*44660/(sigma0+1000) 
   
@@ -1168,17 +1157,26 @@ gsw_O2sol_SP_pt <- function(sal,pt) {
 }
 
 prepare_data <- function(spc,sci_name){
-dat.by.size <- length_expand_bc(sci_name)
-dat3 <- load_data_bc(sci_name = sci_name, spc=spc, dat.by.size = dat.by.size, length=F)
-dat.by.size <- length_expand_nwfsc(spc=spc, sci_name=sci_name)
-dat2 <- load_data_nwfsc(spc= spc, sci_name=sci_name, dat.by.size = dat.by.size, length=F)
+dat.by.size <- try(length_expand_bc(sci_name))
+dat3 <- try(load_data_bc(sci_name = sci_name, spc=spc, dat.by.size = dat.by.size, length=F))
+dat.by.size <- try(length_expand_nwfsc(spc=spc, sci_name=sci_name))
+dat2 <- try(load_data_nwfsc(spc= spc, sci_name=sci_name, dat.by.size = dat.by.size, length=F))
 if(spc=="pacific halibut"){
   catch <-  read_excel("~/Dropbox/choke species/code/choke-species-data/data/fish_raw/IPHC/IPHC_FISS_set_halibut.xlsx")
   adjustment <- read_excel("~/Dropbox/choke species/code/choke-species-data/data/fish_raw/IPHC/iphc-2023-fiss-hadj-20231031.xlsx")
   IPHC <- IPHC(catch, adjustment)
 }
 
+if(length(dat3)>0 && length(dat2)>0){
 dat4 <- bind_rows(dat3, dat2)
+}
+if(length(dat3)>0&& length(dat2==0)){
+  dat4 <- dat3
+}
+if(length(dat2)>0&& length(dat3==0)){
+  dat4 <- dat2
+}
+
 
 #List of species--will get to this 
 #sci_names <- c("")
@@ -1243,7 +1241,7 @@ dat$X <- dat$long
 dat$Y <- dat$lat
 dat$cpue_kg_km2_sub <- dat$cpue_kg_km2 * (dat$p2+dat$p3)
 dat$year <- as.factor(dat$year)
-return(dat)
+try(return(dat))
 }
 
 positive_catches <- function(dat){
@@ -1256,4 +1254,42 @@ positive_catches <- function(dat){
   summary <- matrix(data=c(prop_positive, prop_missing, prop_no_length, total), ncol=4, nrow=1)
   colnames(summary) <- c("prop_positive", "prop_zero", "prop_no_lengths", "total_n_hauls")
   return(summary)
+}
+
+#Function to run sdmTMB for one model
+run_sdmTMB <- function(formulas, dat, start, spc){
+  formula <- unlist(formulas)
+  
+  # make spde
+ mesh <- make_mesh(dat,xy_cols = c('X','Y'), 
+                    cutoff = 20)
+  
+  print('running model.')
+  m <- try( sdmTMB(
+    formula = as.formula(formula),
+    data = dat, 
+    spatial = "on",
+    mesh=mesh,
+    anisotropy=T,
+    reml=F,
+    time=NULL,
+    family =tweedie(link="log")))
+    #extra_time=1980:2100))
+    #,control = sdmTMBcontrol(
+   #   start = list(b_threshold = start))
+  #)
+  
+  if(class(m)=="try-error"){
+    print(paste("Error."))
+  }else{
+    print(paste("Model for",formula,spc,"complete."))
+  }
+  
+  # return(m)
+  return(m)
+}
+
+paste_reverse <- function(x, y) {
+  item <- paste0(y,x)
+  return(item)
 }
