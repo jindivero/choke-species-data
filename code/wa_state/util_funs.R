@@ -126,7 +126,7 @@ load_data_nwfsc <- function(spc,sci_name, dat.by.size, length=T) {
   dat$event_id <- dat$trawl_id
   dat$year <- as.character(dat$year)
   dat <- dplyr::select(dat, event_id, common_name, project, vessel, tow, year, longitude_dd, latitude_dd, long, lat, cpue_kg_km2,
-                       depth_m, julian_day, nlength, median_weight, pass, p1, p2, p3, p4)
+                       depth_m, julian_day, nlength, median_weight, haul_weight, pass, p1, p2, p3, p4)
   
   # UTM transformation
   dat_ll = dat
@@ -232,6 +232,8 @@ length_expand_nwfsc <- function(spc, sci_name) {
   b <- mean(pars$b)
   #Calculate weight (and convert from g to kg)
   dat_pos <- dplyr::mutate(dat_pos, weight = ifelse(is.na(weight), ((a*length_cm^b)*0.001), weight))
+  #Add column getting the mean individual weight 
+  dat_test <- group_by(dat_pos, trawl_id) %>% mutate(haul_weight=mean(weight)) %>% ungroup()
   
   trawlids <- unique(dat_pos$trawl_id)
 
@@ -288,7 +290,9 @@ length_expand_nwfsc <- function(spc, sci_name) {
   all_hauls$trawl_id <- as.numeric(all_hauls$trawl_id)
   dat_sub$median_weight <- median(dat_sub$weight, na.rm=T)
   nlengths <- unique(dat_sub[,c("trawl_id","nlength", "median_weight")])
+  meanweight <- unique(dat_test[,c("trawl_id","haul_weight")])
   all_hauls2 <- left_join(all_hauls, nlengths)
+  all_hauls2 <- left_join(all_hauls2, meanweight)
   return(all_hauls2)
   }
   
@@ -299,7 +303,8 @@ length_expand_nwfsc <- function(spc, sci_name) {
                             p2 = NA,
                             p3 = NA,
                             p4 = NA,
-                            nlength=0)
+                            nlength=0,
+                            haul_weight=NA)
     return(absent.df)
   }
   }
@@ -473,6 +478,8 @@ length_expand_afsc <- function(sci_name, years, region) {
    #Calculate weight (and convert from g to kg)
    dat_pos <- dplyr::mutate(dat_pos, weight = ifelse(is.na(weight), ((a*length_cm^b)*0.001), weight))
   #convert cm-g units
+   #haul level weight
+   dat_test <- group_by(dat_pos, event_id) %>% mutate(haul_weight=mean(weight)) %>% ungroup()
   
   #make column of trawl_id, which is called hauljoin originally in the AFSC data
   trawlids <- unique(dat_pos$trawl_id)
@@ -526,10 +533,11 @@ length_expand_afsc <- function(sci_name, years, region) {
   
   all_hauls <- rbind(p, absent.df)
   all_hauls$trawl_id <- as.numeric(all_hauls$trawl_id)
-  #Add nlengths back
   dat_sub$median_weight <- median(dat_sub$weight, na.rm=T)
   nlengths <- unique(dat_sub[,c("trawl_id","nlength", "median_weight")])
+  meanweight <- unique(dat_test[,c("trawl_id","haul_weight")])
   all_hauls2 <- left_join(all_hauls, nlengths)
+  all_hauls2 <- left_join(all_hauls2, meanweight)
   return(all_hauls2)
   }
   }
@@ -541,7 +549,8 @@ length_expand_afsc <- function(sci_name, years, region) {
                             p2 = NA,
                             p3 = NA,
                             p4 = NA,
-                            nlength=0)
+                            nlength=0,
+                            haul_weight=NA)
     return(absent.df)
     
   }
@@ -592,7 +601,7 @@ load_data_afsc <- function(sci_name,dat.by.size, length=T) {
     dat$event_id <- dat$trawl_id
     dat$year <- as.character(dat$year)
     dat <- dplyr::select(dat, event_id, common_name, scientific_name, project, year, bottom_temperature_c, longitude_dd, latitude_dd, long, lat, cpue_kg_km2,
-                         depth_m, julian_day, nlength, median_weight, p1, p2, p3, p4)
+                         depth_m, julian_day, nlength, median_weight, haul_weight, p1, p2, p3, p4)
     
     
     # UTM transformation
@@ -736,6 +745,7 @@ length_expand_bc <- function(sci_name, spc) {
   }
   #Calculate weight (and convert from g to kg)
   dat_pos <- dplyr::mutate(dat_pos, weight = ifelse(is.na(weight), ((a*length_cm^b)*0.001), weight))
+  dat_test <- group_by(dat_pos, event_id) %>% mutate(haul_weight=mean(weight)) %>% ungroup()
   
   trawlids <- unique(dat_pos$event_id)
   if(length(trawlids!=0)){
@@ -790,7 +800,9 @@ length_expand_bc <- function(sci_name, spc) {
   all_hauls$event_id <- as.numeric(all_hauls$event_id)
   dat_sub$median_weight <- median(dat_sub$weight, na.rm=T)
   nlengths <- unique(dat_sub[,c("event_id","nlength", "median_weight")])
+  meanweight <- unique(dat_test[,c("event_id","haul_weight")])
   all_hauls2 <- left_join(all_hauls, nlengths)
+  all_hauls2 <- left_join(all_hauls2, meanweight)
   return(all_hauls2)
   }
   }
@@ -801,7 +813,8 @@ length_expand_bc <- function(sci_name, spc) {
                             p2 =NA,
                             p3 = NA,
                             p4 = NA,
-                            nlength=0)
+                            nlength=0,
+                            haul_weight=NA)
     return(absent.df)
     
   }
@@ -855,7 +868,7 @@ load_data_bc <- function(sci_name,dat.by.size, length=T, spc) {
   dat$year <- substr(dat$date, start=1, stop=4)
   dat$project <- dat$survey_name
   dat <- dplyr::select(dat, event_id, scientific_name, project, year, longitude_dd, latitude_dd, long, lat, cpue_kg_km2,
-                       depth_m, julian_day, nlength,median_weight, pass, p1, p2, p3, p4)
+                       depth_m, julian_day, nlength,median_weight, haul_weight, pass, p1, p2, p3, p4)
   dat <- filter(dat, !is.na(latitude_dd))
   
   
@@ -1167,13 +1180,13 @@ if(spc=="pacific halibut"){
   IPHC <- IPHC(catch, adjustment)
 }
 
-if(length(dat3)>0 && length(dat2)>0){
+if(length(dat3)>0 & length(dat2)>0){
 dat4 <- bind_rows(dat3, dat2)
 }
-if(length(dat3)>0&& length(dat2==0)){
+if(length(dat3)>0&& length(dat2)==0){
   dat4 <- dat3
 }
-if(length(dat2)>0&& length(dat3==0)){
+if(length(dat2)>0&& length(dat3)==0){
   dat4 <- dat2
 }
 
@@ -1226,6 +1239,9 @@ dat$mean_weight <- mean(dat$median_weight, na.rm=T)
 dat$mi1 <- calc_mi(Eo1, Ao, dat$mean_weight,  n, dat$po2, dat$invtemp)
 dat$mi2 <- calc_mi(Eo2, Ao, dat$mean_weight, n, dat$po2, dat$invtemp)
 dat$mi3 <- calc_mi(Eo3, Ao, dat$mean_weight, n, dat$po2, dat$invtemp)
+
+#For each body size
+dat$mi5 <- calc_mi(Eo1, Ao, dat$haul_weight,  n, dat$po2, dat$invtemp)
 
 ##Scale and such
 dat$temp_s <- (scale(dat$temp_ROMS))
@@ -1292,4 +1308,43 @@ run_sdmTMB <- function(formulas, dat, start, spc){
 paste_reverse <- function(x, y) {
   item <- paste0(y,x)
   return(item)
+}
+
+##Function to run model and return list of model outputs
+run_sdmTMB_noprior <- function(simdat, start, mesh) {
+  m2 <- try(sdmTMB(sim ~ -1+as.factor(year)+logistic(mi_usual_s)+log_depth_scaled+log_depth_scaled2, 
+                   data = simdat, 
+                   spatial = "on",
+                   spatiotemporal="off",
+                   mesh=mesh,
+                   family =tweedie(link="log"),
+                   control = sdmTMBcontrol(
+                     start = list(b_threshold = start),
+                     #lower = list(b_threshold = c(-Inf, -Inf, -Inf, -Inf)), 
+                     # upper = list(b_threshold = c(Inf, Inf, 100, Inf)),
+                     newton_loops = 2)))
+  try(tidy(m2))
+  try(return(m2))
+}
+
+simulate_fish<- function(dat,mesh, s50, delta, smax, modelpars) {
+  # extract model pars
+  parnames <- names(modelpars)
+  for (i in 1:length(parnames)) eval(parse(text = paste0(parnames[i],"<-", modelpars[i])))
+  
+  seed <- sample(1:1000, 1)
+  sim <- sdmTMB_simulate(formula=~-1+as.factor(year)+logistic(mi_usual_s)+log_depth_scaled+log_depth_scaled2,
+                         data=dat,
+                         family=tweedie(link="log"),
+                         tweedie_p=p,
+                         phi=phi,
+                         range=range,
+                         sigma_O=sigma_O,
+                         sigma_E=NULL,
+                         mesh=mesh,
+                         threshold_coefs=c(s50, delta, smax),
+                         B=c(b_years, beta1, beta2),
+                         seed=seed)
+  dat$sim <- sim$observed
+  return(dat)
 }

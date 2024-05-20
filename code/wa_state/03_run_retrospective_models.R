@@ -19,7 +19,20 @@ formulas <- lapply(formulas, paste_reverse, null)
 
 fits <- lapply(formulas, run_sdmTMB, dat, spc)
 
-
+p1 <- ggplot(subset(pars, pars$term=="mi-Eo"&pars$analysis=="Unconstrained"), aes(x=estimate)) +
+  geom_density(fill="lightblue", adjust = 1.5) +
+  geom_vline(data=subset(Eo_values, Eo_values$analysis=="Unconstrained"), aes(xintercept = MLE_avg),linetype="dashed", size=1.2, color="darkorange", show.legend=T)+
+  geom_vline(data=subset(Eo_values, Eo_values$analysis=="Unconstrained"), aes(xintercept = true),linetype="dashed", size=1.2)+
+  facet_wrap("data", labeller=labeller(data = new_labels))+
+  scale_y_continuous(limits=c(0,6))+
+  scale_x_continuous(limits=c(-0.7,1.4))+
+  xlab(bquote(E[0]~Maximum~Likelihood~Estimate))+
+  theme(axis.title.y=element_blank(),
+    axis.title.x=element_text(size=25),
+    axis.text=element_text(size=20),
+    strip.background = element_rect(fill="white", color="white"), 
+    strip.text= element_text(face = "bold", size=25))
+  
 
 
 
