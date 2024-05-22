@@ -229,9 +229,11 @@ length_expand_nwfsc <- function(spc, sci_name) {
 
   dat_pos <- bind_rows(dat_pos2, not_fitted)
   }
-  if(nrow(fitted)>0 & nrow(not_fitted)>0){
+  
+  if(nrow(fitted)==0 & nrow(not_fitted)>0){
     dat_pos <- not_fitted
   }
+  
   if(nrow(fitted)>0 | nrow(not_fitted)>0){
   #If there is no weight data available to get weight-length empirical interpolation, use fishbase to fill in
   # find length-weight relationship parameters for one species
@@ -1297,9 +1299,9 @@ dat <- subset(dat, year<2022)
 
 ### Set up environmental data ###
 ##Set NA for missing ROMS data
-dat$o2_ROMS <- ifelse(dat$o2>=0, dat$o2_ROMS, NA)
-dat$temp_ROMS <- ifelse(dat$o2>=0, dat$temp_ROMS, NA)
-dat$sal_ROMS <- ifelse(dat$o2>=0, dat$sal_ROMS, NA)
+dat$o2_ROMS <- ifelse(dat$o2_ROMS>=0, dat$o2_ROMS, NA)
+dat$temp_ROMS <- ifelse(dat$temp_ROMS>=0, dat$temp_ROMS, NA)
+dat$sal_ROMS <- ifelse(dat$sal_ROMS>=0, dat$sal_ROMS, NA)
 
 ## Convert oxygen from ROMS concentration (mmol/m^3) to kPa
 dat$po2 <- calc_po2_sat(salinity=dat$sal_ROMS, temp=dat$temp_ROMS, depth=dat$depth_m, oxygen=dat$o2_ROMS, lat=dat$lat, long=dat$long, umol_m3=T, ml_L=F)
@@ -1364,8 +1366,7 @@ positive_catches <- function(dat){
 }
 
 #Function to run sdmTMB for one model
-run_sdmTMB <- function(formulas, dat, start, spc){
-  formula <- unlist(formulas)
+run_sdmTMB <- function(formula, dat, start, spc){
   
   # make spde
  mesh <- make_mesh(dat,xy_cols = c('X','Y'), 
