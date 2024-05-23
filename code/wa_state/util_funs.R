@@ -307,6 +307,7 @@ length_expand_nwfsc <- function(spc, sci_name) {
  }
   }
   }
+  if(nrow(dat_sub)>0){
   if(nrow(fitted)==0 & nrow(not_fitted)==0){
     trawlids <- unique(dat_sub$trawl_id)
     absent.df <- data.frame(trawl_id = trawlids,
@@ -319,6 +320,8 @@ length_expand_nwfsc <- function(spc, sci_name) {
                             median_weight=NA)
     return(absent.df)
   }
+  }
+  if(nrow(dat_sub)>0){
   if(length(trawlids)==0){
     trawlids <- unique(dat_sub$trawl_id)
     absent.df <- data.frame(trawl_id = trawlids,
@@ -329,6 +332,10 @@ length_expand_nwfsc <- function(spc, sci_name) {
                             nlength=0,
                             haul_weight=NA)
     return(absent.df)
+  }
+  }
+  if(nrow(dat_sub)==0){
+    return(warning("species not present in data"))
   }
   }
 
@@ -573,7 +580,7 @@ length_expand_afsc <- function(sci_name) {
   return(all_hauls2)
   }
   }
-  
+  if(nrow(dat_sub)>0){
   if(nrow(fitted)==0 & nrow(not_fitted)==0){
     trawlids <- unique(dat_sub$trawl_id)
     absent.df <- data.frame(trawl_id = trawlids,
@@ -586,8 +593,10 @@ length_expand_afsc <- function(sci_name) {
                             median_weight=NA)
     return(absent.df)
   }
+  }
   #If there are no hauls at all with any length measurements, do this instead (because caused an error in the kernel density function otherwise)
-trawlids <- unique(dat_sub$trawl_id)
+if(nrow(dat_sub)>0){
+  trawlids <- unique(dat_sub$trawl_id)
  if(length(trawlids)==0){
     absent.df <- data.frame(trawl_id = trawlids,
                             p1 = NA,
@@ -597,7 +606,11 @@ trawlids <- unique(dat_sub$trawl_id)
                             nlength=0,
                             haul_weight=NA)
     return(absent.df)
-  }
+ }
+}
+if(nrow(dat_sub)==0){
+  return(warning("species not present in data"))
+}
 }
 
 load_data_afsc <- function(sci_name, spc, dat.by.size, length=T) {
@@ -725,11 +738,7 @@ length_expand_bc <- function(sci_name, spc) {
   
   # filter out species of interest from joined (catch/haul/bio) dataset
   dat_sub = dplyr::filter(dat, scientific_name==sci_name)
-  
-  if(nrow(dat_sub)==0){
-    warning("species not present in data")
-  }
-  
+
   dat_sub$event_id <- as.numeric(dat_sub$event_id)
   trawlids <- unique(dat_sub$event_id)
   
@@ -848,6 +857,7 @@ length_expand_bc <- function(sci_name, spc) {
   return(all_hauls2)
   }
   }
+  if(nrow(dat_sub)>0){
   if(nrow(fitted)==0 & nrow(not_fitted)==0){
     trawlids <- unique(dat_sub$trawl_id)
     absent.df <- data.frame(trawl_id = trawlids,
@@ -860,6 +870,8 @@ length_expand_bc <- function(sci_name, spc) {
                             median_weight=NA)
     return(absent.df)
   }
+  }
+  if(nrow(dat_sub)>0){
   if(length(trawlids)==0){
     absent.df <- data.frame(trawl_id = trawlids,
                             p1 = NA,
@@ -869,6 +881,10 @@ length_expand_bc <- function(sci_name, spc) {
                             nlength=0,
                             haul_weight=NA)
     return(absent.df)
+  }
+  }
+  if(nrow(dat_sub)==0){
+    return(warning("species not present in data"))
   }
 }
 
@@ -1225,15 +1241,26 @@ gsw_O2sol_SP_pt <- function(sal,pt) {
 prepare_data <- function(spc,sci_name){
 dat.by.size <- try(length_expand_bc(sci_name))
 gc()
+if(is.data.frame(dat.by.size)){
 dat3 <- try(load_data_bc(sci_name = sci_name, spc=spc, dat.by.size = dat.by.size, length=F))
+}
 gc()
+rm(dat.by.size)
+
 dat.by.size <- try(length_expand_nwfsc(spc=spc, sci_name=sci_name))
 gc()
+if(is.data.frame(dat.by.size)){
 dat2 <- try(load_data_nwfsc(spc= spc, sci_name=sci_name, dat.by.size = dat.by.size, length=F))
+}
+
 gc()
+rm(dat.by.size)
 dat.by.size <- try(length_expand_afsc(sci_name))
 gc()
+if(is.data.frame(dat.by.size)){
 dat5 <- try(load_data_afsc(sci_name = sci_name, spc=spc, dat.by.size = dat.by.size, length=F))
+}
+
 gc()
 
 if(spc=="pacific halibut"){
@@ -1345,6 +1372,9 @@ dat$X <- dat$long
 dat$Y <- dat$lat
 dat$cpue_kg_km2_sub <- dat$cpue_kg_km2 * (dat$p2+dat$p3)
 dat$year <- as.factor(dat$year)
+
+#Make broader region for BC
+dat$region<- ifelse(str_detect(dat$project, "SYN"), "BC", dat$project)
 try(return(dat))
 }
 

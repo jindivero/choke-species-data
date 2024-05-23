@@ -1,5 +1,6 @@
-###Fit suite of retrospective models
+##Fit retrospective models
 
+#Set wd and load functions
 source("/Users/jindiv/Library/CloudStorage/Dropbox/choke species/code/choke-species-data/code/wa_state/util_funs.R")
 setwd("/Users/jindiv/Library/CloudStorage/Dropbox/choke species/code/choke-species-data")
 
@@ -13,27 +14,24 @@ mesh <- make_mesh(dat, xy_cols = c("X", "Y"), n_knots=250)
 ## Make list of models ##
 #Null model
 null <- "cpue_kg_km2~-1+year+log_depth_scaled+log_depth_scaled2"
-formulas <- list("+breakpt(po2_s)") 
-#"+logistic(po2_s)", "+logistic(mi1_s)", "+logistic(mi2_s)", "+logistic(mi3_s)", "+po2_s", "+po2_s+temp_s", "+temp_s", "+po2_s*temp_s", "+s(po2_s)", "+s(mi1_s)", "+s(mi2_s)", "+s(mi3_s)")
+null2 <- "cpue_kg_km2~-1+year+s(log_depth_scaled)"
+formulas <- list("+breakpt(po2_s)", "+logistic(po2_s)", "+logistic(mi1_s)", "+logistic(mi2_s)", "+logistic(mi3_s)", "+po2_s", "+po2_s+temp_s", "+temp_s", "+po2_s*temp_s", "+s(po2_s)", "+s(mi1_s)", "+s(mi2_s)", "+s(mi3_s)")
 formulas <- lapply(formulas, paste_reverse, null)
 
-fits <- lapply(formulas, run_sdmTMB, dat, spc)
+#Using lapply:
+#fits <- lapply(formulas, run_sdmTMB, dat, spc)
 
-p1 <- ggplot(subset(pars, pars$term=="mi-Eo"&pars$analysis=="Unconstrained"), aes(x=estimate)) +
-  geom_density(fill="lightblue", adjust = 1.5) +
-  geom_vline(data=subset(Eo_values, Eo_values$analysis=="Unconstrained"), aes(xintercept = MLE_avg),linetype="dashed", size=1.2, color="darkorange", show.legend=T)+
-  geom_vline(data=subset(Eo_values, Eo_values$analysis=="Unconstrained"), aes(xintercept = true),linetype="dashed", size=1.2)+
-  facet_wrap("data", labeller=labeller(data = new_labels))+
-  scale_y_continuous(limits=c(0,6))+
-  scale_x_continuous(limits=c(-0.7,1.4))+
-  xlab(bquote(E[0]~Maximum~Likelihood~Estimate))+
-  theme(axis.title.y=element_blank(),
-    axis.title.x=element_text(size=25),
-    axis.text=element_text(size=20),
-    strip.background = element_rect(fill="white", color="white"), 
-    strip.text= element_text(face = "bold", size=25))
-  
+#Add starting values to control
 
+#Or in a loop
+fits <- list()
+for(i in 1:length(formulas)){
+  message( "Fitting ", formulas[i], Sys.time() )
+  formula <- formulas[i]
+  fit <- run_sdmTMB(formula, dat, start, spc)
+  name <- paste(formulas[i])
+  fits[[name]] <- fit
+}
 
 
 ###Multiple species
