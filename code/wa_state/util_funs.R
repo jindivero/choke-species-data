@@ -245,12 +245,12 @@ length_expand_nwfsc <- function(spc, sci_name) {
   b <- mean(pars$b)
   #Make NAs where text
   dat_pos$weight <- ifelse(dat_pos$weight=="NaN", NA, dat_pos$weight)
+  #Remove any zero weights
+  dat_pos$weight <- ifelse(dat_pos$weight==0, NA, dat_pos$weight)
   #Calculate weight (and convert from g to kg)
   dat_pos <- dplyr::mutate(dat_pos, weight = ifelse(is.na(weight), ((a*length_cm^b)*0.001), weight))
   #Add column getting the mean individual weight 
   dat_test <- group_by(dat_pos, trawl_id) %>% mutate(haul_weight=mean(weight)) %>% ungroup()
-  #Remove any zero weights
-  dat_pos$weight <- ifelse(dat_pos$weight==0, NA, dat_pos$weight)
   
   trawlids <- unique(dat_pos$trawl_id)
   if(length(trawlids!=0)){
@@ -733,6 +733,13 @@ length_expand_bc <- function(sci_name, spc) {
   
   #Combine catch data with haul data
   dat <- dplyr::left_join(catch, haul, relationship = "many-to-many")
+  
+  #Rename missing species
+  if(sci_name=="sebastes aleutianus"){
+    bio$scientific_name <- ifelse(str_detect(bio$scientific_name, "sebastes aleutianus"), "sebastes aleutianus", bio$scientific_name)
+    bio$common_name <- ifelse(str_detect(bio$common_name, "rougheye"), "rougheye rockfish", bio$common_name)
+  }
+  
   #Combine bio/haul data with catch data
   dat <- dplyr::left_join(dat, filter(bio[,c("event_id", "age", "sex","length_cm", "weight", "scientific_name", "common_name")], !is.na(length_cm)), relationship = "many-to-many")
   
