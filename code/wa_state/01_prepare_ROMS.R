@@ -47,7 +47,7 @@ depth <- ncvar_get(nc_ds, "h")
 mask_rho <- ncvar_get(nc_ds, "mask_rho")
 mask_var <- ncvar_get(nc_ds, "mask_var")
 
-#Convert time to YYY-MM-DD format (number of days since 1-Jan-2070)
+#Convert time to YYY-MM-DD format (number of days since 1-Jan-1970)
 date <- as.POSIXct(ymd("1970-01-01") + dseconds(dim_time))
 
 #Convert 2D coordinates to 1D coordinates
