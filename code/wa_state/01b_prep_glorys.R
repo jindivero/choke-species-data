@@ -28,14 +28,17 @@ setwd("~/Dropbox/choke species/code/Copernicus/temp_sal/jindivero/zone1")
 ####Zone 1 (West Coast)
 ###Load haul info for NOAA West Coast and IPHC
 load("/Users/jindiv/Library/CloudStorage/Dropbox/choke species/code/choke-species-data/data/fish_raw/NOAA/nwfsc_haul.rda")
-IPHC <- read_excel("~/Dropbox/choke species/code/choke-species-data/data/fish_raw/IPHC/iphc-2023-fiss-hadj-20231031.xlsx")
+IPHC <-  read_excel("~/Dropbox/choke species/code/choke-species-data/data/fish_raw/IPHC/IPHC_FISS_set_halibut.xlsx")
+
 ##Housekeeping
 colnames(IPHC) <- tolower(colnames(IPHC))
-IPHC <- IPHC[,c("stlkey", "year", "date", "midlat", "midlon")]
-IPHC$lat_start <- IPHC$midlat
-IPHC$midlat <- NULL
-IPHC$lon_start <- IPHC$midlon
-IPHC$midlon <- NULL
+IPHC <- IPHC[,c("stlkey", "date", "beginlat", "beginlon", "begindepth (fm)", "temp c", "salinity psu", "oxygen_ml", "oxygen_umol", "oxygen_sat")]
+IPHC$lat_start <- IPHC$beginlat
+IPHC$beginlat <- NULL
+IPHC$lon_start <- IPHC$beginlon
+IPHC$beginlon <- NULL
+IPHC$depth_IPHC <- IPHC$`begindepth (fm)`
+IPHC$`begindepth (fm)` <- NULL
 
 ##Combine
 haul_combined <- bind_rows(nwfsc_haul, IPHC)
@@ -177,8 +180,8 @@ nc_bottom_all <- purrr::map_df(times$time,extract_bottom_vars)
 nc_bottom_all <- nc_bottom_all %>% mutate(time=as_datetime("1950-01-01 00:00:00")+hours(time))
 
 #Save
-saveRDS(nc_bottom_all, file="wc_glorys_o2.rds")
-nc_bottom_all2 <- as.data.frame(readRDS("wc_glorys_o2.rds"))
+saveRDS(nc_bottom_all, file="glorys_o2_wc_full_region_bottom.rds.rds")
+nc_bottom_all2 <- as.data.frame(readRDS("~/Dropbox/choke species/code/choke-species-data/data/glorys/full_regions_bottom/glorys_o2_wc_full_region_bottom.rds"))
 
 ##Match to survey data
 
@@ -207,11 +210,11 @@ points$time <- as.character(haul_combined$date2)
 #Extract data
 nc_bottom_all2$time <- as.character(as.Date(nc_bottom_all2$time, format='%m/%d/%Y'))
 nc_bottom_all2 <- unique(nc_bottom_all2)
+colnames(nc_bottom_all2) <- c("no3_glorys", "o2_glorys", "po4_glorys", "chl_glorys", "si_glorys", "nppv_glorys", "lon_gloryso2", "lat_gloryso2", "depth_gloryso2", "date_gloryso2")
+colnames(points) <- c("lat_gloryso2", "lon_gloryso2", "date_gloryso2")
 nc_bottom_all4 <- left_join(points, nc_bottom_all2)
 
 glorys_wc <- bind_cols(nc_bottom_all4, haul_combined)
-colnames(nc_bottom_all4) <- c("lat_gloryso2", "lon_gloryso2", "date_gloryso2", "no3_glorys", "o2_glorys", "po4_glorys", "chl_glorys","si_glorys", "nppv_glorys", "depth_glorys")
-
 saveRDS(glorys_wc, file="glorys_o2_WC.rds")
 
 ####Alaska
@@ -219,21 +222,23 @@ saveRDS(glorys_wc, file="glorys_o2_WC.rds")
 setwd("~/Dropbox/choke species/code/Copernicus/temp_sal/jindivero/zone2")
 
 ###Haul data
-IPHC <- read_excel("~/Dropbox/choke species/code/choke-species-data/data/fish_raw/IPHC/iphc-2023-fiss-hadj-20231031.xlsx")
+IPHC <-  read_excel("~/Dropbox/choke species/code/choke-species-data/data/fish_raw/IPHC/IPHC_FISS_set_halibut.xlsx")
 bio2 <-readRDS("~/Dropbox/choke species/code/choke-species-data/data/fish_raw/NOAA/ak_bts_goa_ebs_nbs_all_levels.RDS")
 haul <- bio2$haul
 
 ##Housekeeping
-colnames(IPHC) <- tolower(colnames(IPHC))
 colnames(haul) <- tolower(colnames(haul))
-IPHC <- IPHC[,c("stlkey", "year", "date", "midlat", "midlon")]
-IPHC$lat_start <- IPHC$midlat
-IPHC$midlat <- NULL
-IPHC$lon_start <- IPHC$midlon
-IPHC$midlon <- NULL
+colnames(IPHC) <- tolower(colnames(IPHC))
+IPHC <- IPHC[,c("stlkey", "date", "beginlat", "beginlon", "begindepth (fm)", "temp c", "salinity psu", "oxygen_ml", "oxygen_umol", "oxygen_sat")]
+IPHC$lat_start <- IPHC$beginlat
+IPHC$beginlat <- NULL
+IPHC$lon_start <- IPHC$beginlon
+IPHC$beginlon <- NULL
+IPHC$depth_IPHC <- IPHC$`begindepth (fm)`
+IPHC$`begindepth (fm)` <- NULL
 
-haul <- haul[,c("hauljoin", "start_time", "start_latitude", "start_longitude")]
-colnames(haul) <- c("hauljoin", "date", "lat_start", "lon_start")
+haul <- haul[,c("hauljoin", "start_time", "start_latitude", "start_longitude", "bottom_depth", "gear_temperature")]
+colnames(haul) <- c("hauljoin", "date", "lat_start", "lon_start", "bottom_depth", "gear_temperature")
 ##Combine
 haul_combined <- bind_rows(haul, IPHC)
 
@@ -293,6 +298,9 @@ nc_bottom_all <- nc_bottom_all %>% mutate(time=as_datetime("1950-01-01 00:00:00"
 nc_bottom_all2 <- as.data.frame(nc_bottom_all)
 saveRDS(nc_bottom_all2, file="glorys_tempsal_ak_full_region_bottom.rds")
 nc_bottom_all2 <- unique(nc_bottom_all2)
+nc_bottom_all2 <- readRDS("~/Dropbox/choke species/code/choke-species-data/data/glorys/full_regions_bottom/glorys_tempsal_ak_full_region_bottom.rds")
+
+
 ##Match to survey data
 
 ##Find closest matching date
@@ -376,9 +384,20 @@ nc_bottom_all_b <- nc_bottom_all_b %>% mutate(time=as_datetime("1950-01-01 00:00
 #Save
 saveRDS(nc_bottom_all, file="glorys_o2_ak_full_region_bottom.rds")
 saveRDS(nc_bottom_all_b, file="glorys_o2_ak2_full_region_bottom.rds")
+nc_bottom_all <- readRDS("~/Dropbox/choke species/code/choke-species-data/data/glorys/full_regions_bottom/glorys_o2_ak_full_region_bottom.rds")
+nc_bottom_all_b <- readRDS("~/Dropbox/choke species/code/choke-species-data/data/glorys/full_regions_bottom/glorys_o2_ak2_full_region_bottom.rds")
 
 #Combine
 nc_bottom_all2 <- bind_rows(nc_bottom_all, nc_bottom_all_b)
+nc_bottom_all2 <- nc_bottom_all2 %>% mutate(time=as_datetime("1950-01-01 00:00:00")+hours(time))
+
+saveRDS(nc_bottom_all2, file="glorys_o2_akcombined_full_region_bottom.rds")
+nc_bottom_all2 <- readRDS("~/Dropbox/choke species/code/choke-species-data/data/glorys/full_regions_bottom/glorys_o2_akcombined_full_region_bottom.rds")
+
+nc_bottom_all2$time <- as.Date(nc_bottom_all2$time, format='%m/%d/%Y')
+nc_bottom_all2 <- unique(nc_bottom_all2)
+saveRDS(nc_bottom_all2, file="glorys_o2_ak_combinededited_full_region_bottom.rds")
+nc_bottom_all2 <- readRDS("~/Dropbox/choke species/code/choke-species-data/data/glorys/full_regions_bottom/glorys_o2_ak_combinededited_full_region_bottom.rds")
 
 ##Match to survey data
 
@@ -403,30 +422,29 @@ nc_bottom_all2 <- bind_rows(nc_bottom_all, nc_bottom_all_b)
 test <- RANN::nn2(nc_bottom_all2[, c('latitude', 'longitude')], haul_combined[, c('lat_start', "lon_start")],k = 1)
 points <- nc_bottom_all2[c(test$nn.idx),c("latitude", "longitude")]
 #Combine date and coordinates
-points$time <- as.character(haul_combined$date2)
+points$time <- as.Date(haul_combined$date2)
 #Extract data
-nc_bottom_all2$time <- as.character(as.Date(nc_bottom_all2$time, format='%m/%d/%Y'))
-nc_bottom_all2 <- unique(nc_bottom_all2)
+
 nc_bottom_all4 <- left_join(points, nc_bottom_all2)
-
-glorys_wc <- bind_cols(nc_bottom_all4, haul_combined)
-colnames(nc_bottom_all4) <- c("lat_gloryso2", "lon_gloryso2", "date_gloryso2", "no3_glorys", "o2_glorys", "po4_glorys", "chl_glorys","si_glorys", "nppv_glorys", "depth_glorys")
-
-saveRDS(glorys_wc, file="glorys_o2_AK.rds")
+colnames(nc_bottom_all4) <- c("lat_gloryso2", "lon_gloryso2", "date_gloryso2", "no3_glorys", "o2_glorys", "po4_glorys", "chl_glorys","si_glorys", "nppv_glorys", "depth_gloryso2")
+glorys_o2_ak <- bind_cols(nc_bottom_all4, haul_combined)
+saveRDS(glorys_o2_ak, file="glorys_o2_AK.rds")
 
 ####BC
 ###Load haul info for BC and IPHC
 pbs_haul <- readRDS("/Users/jindiv/Library/CloudStorage/Dropbox/choke species/code/choke-species-data/data/fish_raw/BC/pbs-haul.rds")
-IPHC <- read_excel("~/Dropbox/choke species/code/choke-species-data/data/fish_raw/IPHC/iphc-2023-fiss-hadj-20231031.xlsx")
+IPHC <-  read_excel("~/Dropbox/choke species/code/choke-species-data/data/fish_raw/IPHC/IPHC_FISS_set_halibut.xlsx")
+
 ##Housekeeping
-pbs_haul$performance <- as.character(pbs_haul$performance)
 colnames(IPHC) <- tolower(colnames(IPHC))
-IPHC <- IPHC[,c("stlkey", "year", "date", "midlat", "midlon")]
-IPHC$lat_start <- IPHC$midlat
-IPHC$midlat <- NULL
-IPHC$lon_start <- IPHC$midlon
-IPHC$midlon <- NULL
-pbs_haul <- pbs_haul[c("event_id", "date", "lat_start", "lon_start")]
+IPHC <- IPHC[,c("stlkey", "date", "beginlat", "beginlon", "begindepth (fm)", "temp c", "salinity psu", "oxygen_ml", "oxygen_umol", "oxygen_sat")]
+IPHC$lat_start <- IPHC$beginlat
+IPHC$beginlat <- NULL
+IPHC$lon_start <- IPHC$beginlon
+IPHC$beginlon <- NULL
+IPHC$depth_IPHC <- IPHC$`begindepth (fm)`
+IPHC$`begindepth (fm)` <- NULL
+
 ##Combine
 haul_combined <- bind_rows(pbs_haul, IPHC)
 
@@ -489,7 +507,9 @@ nc_bottom_all <- nc_bottom_all %>% mutate(time=as_datetime("1950-01-01 00:00:00"
 #Save
 nc_bottom_all2 <- nc_bottom_all[,c("thetao", "so", "longitude", "latitude", "depth", "time")]
 saveRDS(nc_bottom_all2, file="glorys_tempsal_bc_full_region_bottom.rds")
+nc_bottom_all2 <- readRDS("~/Dropbox/choke species/code/choke-species-data/data/glorys/full_regions_bottom/glorys_tempsal_bc_full_region_bottom.rds")
 nc_bottom_all2 <- unique(nc_bottom_all2)
+
 ##Match to survey data
 
 ##Find closest matching date
@@ -520,8 +540,8 @@ points$time <- as.vector(date)
 #Extract data
 nc_bottom_all4 <- left_join(points, nc_bottom_all3)
 colnames(nc_bottom_all4) <- c("lat_glorysphys", "lon_glorysphys", "date_glorysphys", "temp_glorys", "sal_glorys", "depth_glorysphys")
-glorys_wc <- bind_cols(nc_bottom_all4, haul_combined)
-saveRDS(glorys_wc, file="glorys_tempsal_BC.rds")
+glorys_bc <- bind_cols(nc_bottom_all4, haul_combined)
+saveRDS(glorys_bc, file="glorys_tempsal_BC.rds")
 
 ###oxygen
 setwd("~/Dropbox/choke species/code/Copernicus/o2/bc")
@@ -564,6 +584,8 @@ nc_bottom_all <- nc_bottom_all %>% mutate(time=as_datetime("1950-01-01 00:00:00"
 
 #Save
 saveRDS(nc_bottom_all, file="glorys_o2_bc_full_region_bottom.rds")
+nc_bottom_all2 <- readRDS("~/Dropbox/choke species/code/choke-species-data/data/glorys/full_regions_bottom/glorys_o2_bc_full_region_bottom.rds")
+
 
 ##Match to survey data
 
@@ -593,14 +615,8 @@ points$time <- as.character(haul_combined$date2)
 nc_bottom_all2$time <- as.character(as.Date(nc_bottom_all2$time, format='%m/%d/%Y'))
 nc_bottom_all2 <- unique(nc_bottom_all2)
 nc_bottom_all4 <- left_join(points, nc_bottom_all2)
+colnames(nc_bottom_all4) <- c("lat_gloryso2", "lon_gloryso2", "date_gloryso2", "no3_glorys", "o2_glorys", "po4_glorys", "chl_glorys","si_glorys", "nppv_glorys", "depth_gloryso2")
 
-glorys_wc <- bind_cols(nc_bottom_all4, haul_combined)
-colnames(nc_bottom_all4) <- c("lat_gloryso2", "lon_gloryso2", "date_gloryso2", "no3_glorys", "o2_glorys", "po4_glorys", "chl_glorys","si_glorys", "nppv_glorys", "depth_glorys")
+glorys_bc <- bind_cols(nc_bottom_all4, haul_combined)
 
-saveRDS(glorys_wc, file="glorys_o2_BC.rds")
-
-
-###Combine oxygen, temp, and salinity
-
-
-###Combine
+saveRDS(glorys_bc, file="glorys_o2_BC.rds")
