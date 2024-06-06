@@ -2,8 +2,14 @@ devtools::install_github("pbs-assess/sdmTMB", ref="newlogistic2", dependencies =
 library(sdmTMB)
 install.packages("TMB")
 library(TMB)
-install.packages("glmmTMB")
+install.packages("glmmTMB", type="source")
 library(glmmTMB)
+library(ggplot2)
+library(purrr)
+library(mvtnorm)
+
+source("/Users/jindiv/Library/CloudStorage/Dropbox/choke species/code/choke-species-data/code/wa_state/util_funs.R")
+setwd("/Users/jindiv/Library/CloudStorage/Dropbox/choke species/code/choke-species-data")
 
 ### Set ggplot themes ###
 theme_set(theme_bw(base_size = 35))
@@ -15,8 +21,6 @@ theme_update(panel.grid.major = element_blank(), panel.grid.minor = element_blan
 s50 <-2 # same as sablefish= 0.88; had been 2 in previous data simulation
 delta <- 2 #same as sablefish = 0.57; had been 2 in previous data simulation
 smax <- 30 # maximum effect of MI; had been 4 in previous data simulation
-Eo <- 0.3
-Eo2 <- 0.7
 
 b_years <- rnorm(n = 6, mean = 4, sd = 1)
 beta1 <- 1.5
@@ -26,15 +30,36 @@ p <- 1.51
 range <- 85
 sigma_O <- 1.77
 
+#Lower spatial variation and observation error: make sigma_O, phi less
+phi <- 0.1
+range <- 1
+sigma_O <- 0.01
+
 ### load helper functions ####
 ### Load Data ####
-source("/Users/jindiv/Library/CloudStorage/Dropbox/choke species/code/choke-species-data/code/wa_state/util_funs.R")
-setwd("/Users/jindiv/Library/CloudStorage/Dropbox/choke species/code/choke-species-data")
 
-##Pull real data ##
-sci_name <- "anoplopoma fimbria" 
-spc <- "sablefish" 
-dat <- prepare_data(spc=spc, sci_name=sci_name)
+##Pull real data (example sablefish data from Chapter 2) ## 
+dat <- readRDS("/Users/jindiv/Library/CloudStorage/Dropbox/choke species/code/choke-species-data/example_data.rds")
+#Clean up and add environmental data
+kelvin = 273.15
+boltz = 0.000086173324
+tref <- 12
+#Calculate inverse temp
+dat$invtemp <- (1 / boltz)  * ( 1 / (dat$temp + 273.15) - 1 / (tref + 273.15))
+#Calculate MI for usual case
+dat$mi = dat$po2*exp(0.291* dat$invtemp)
+#Scale and such
+dat$temp_s <- (scale(dat$temp))
+dat$po2_s <- (scale(dat$po2))
+dat$mi_s <- (scale(dat$mi))
+dat$log_depth_scaled <- scale(log(dat$depth))
+dat$log_depth_scaled2 <- with(dat, log_depth_scaled ^ 2)
+dat$jday_scaled <- scale(dat$julian_day)
+dat$jday_scaled2 <- with(dat, jday_scaled ^ 2)
+dat$X <- dat$longitude
+dat$Y <- dat$latitude
+dat$cpue_kg_km2 <- dat$cpue_kg_km2 * (dat$p2+dat$p3)
+dat$year <- as.factor(dat$year)
 
 ### Fish density distribution simulation ####
 
@@ -49,31 +74,14 @@ model.pars <- list(b_years = b_years,
                    p = p,
                    range = range,
                    sigma_O=sigma_O)
+model.pars2 <- list(b_years = b_years,
+                   beta1 = beta1,
+                   beta2 = beta2,
+                   phi = phi,
+                   p = p)
+
 ## Make mesh ##
 mesh <- make_mesh(dat, xy_cols = c("X", "Y"), n_knots=250)
-
-#Edit for new model
-simulate_fish<- function(dat,mesh, s50, delta, smax, modelpars) {
-  # extract model pars
-  parnames <- names(modelpars)
-  for (i in 1:length(parnames)) eval(parse(text = paste0(parnames[i],"<-", modelpars[i])))
-  
-  seed <- sample(1:1000, 1)
-  sim <- sdmTMB_simulate(formula=~-1+as.factor(year)+logistic(mi_usual_s)+log_depth_scaled+log_depth_scaled2,
-                         data=dat,
-                         family=tweedie(link="log"),
-                         tweedie_p=p,
-                         phi=phi,
-                         range=range,
-                         sigma_O=sigma_O,
-                         sigma_E=NULL,
-                         mesh=mesh,
-                         threshold_coefs=c(s50, delta, smax),
-                         B=c(b_years, beta1, beta2),
-                         seed=seed)
-  dat$sim <- sim$observed
-  return(dat)
-}
 
 ### Simulate data ####
 simdat <- map(seq_len(n), ~simulate_fish(dat = dat,
@@ -92,7 +100,7 @@ fits <- lapply(simdat, run_sdmTMB_noprior,
 pars1 <- lapply(fits, extract_pars)
 pars1 <- clean_pars(pars1, fits=fits)
 
-ggplot(subset(pars1, term=="mi_usual_s-smax"), aes(y=estimate, x=id)) +
+ggplot(subset(pars1, term=="mi_s-smax"), aes(y=estimate, x=id)) +
   geom_point()+geom_errorbar(aes(ymin = estimate - std.error,max = estimate + std.error))+ 
  geom_hline(yintercept=smax, colour="red")+
   theme(axis.title.x=element_blank(),
@@ -100,15 +108,7 @@ ggplot(subset(pars1, term=="mi_usual_s-smax"), aes(y=estimate, x=id)) +
         axis.ticks.x=element_blank())+
   ggtitle("smax")
 
-ggplot(subset(pars1, term=="mi_usual_s-smax"&id!=6), aes(y=estimate, x=id)) +
-  geom_point()+geom_errorbar(aes(ymin = estimate - std.error,max = estimate + std.error))+ 
-  geom_hline(yintercept=smax, colour="red")+
-  theme(axis.title.x=element_blank(),
-        axis.text.x=element_blank(),
-        axis.ticks.x=element_blank())+
-  ggtitle("smax")
-
-ggplot(subset(pars1, term=="mi_usual_s-s50"), aes(y=estimate, x=id)) +
+ggplot(subset(pars1, term=="mi_s-s50"), aes(y=estimate, x=id)) +
   geom_point()+geom_errorbar(aes(ymin = estimate - std.error,max = estimate + std.error))+ 
   geom_hline(yintercept=s50, colour="red")+
   theme(axis.title.x=element_blank(),
@@ -116,15 +116,7 @@ ggplot(subset(pars1, term=="mi_usual_s-s50"), aes(y=estimate, x=id)) +
         axis.ticks.x=element_blank())+
   ggtitle("s50")
 
-ggplot(subset(pars1, term=="mi_usual_s-s50"&id!=10), aes(y=estimate, x=id)) +
-  geom_point()+geom_errorbar(aes(ymin = estimate - std.error,max = estimate + std.error))+ 
-  geom_hline(yintercept=s50, colour="red")+
-  theme(axis.title.x=element_blank(),
-        axis.text.x=element_blank(),
-        axis.ticks.x=element_blank())+
-  ggtitle("s50")
-
-ggplot(subset(pars1, term=="mi_usual_s-s95"), aes(y=estimate, x=id)) +
+ggplot(subset(pars1, term=="mi_s-s95"), aes(y=estimate, x=id)) +
   geom_point()+geom_errorbar(aes(ymin = estimate - std.error,max = estimate + std.error))+ 
   geom_hline(yintercept=delta, colour="red")+
   theme(axis.title.x=element_blank(),
@@ -133,9 +125,114 @@ ggplot(subset(pars1, term=="mi_usual_s-s95"), aes(y=estimate, x=id)) +
   ggtitle("s95 (really delta)")
 
 
+#### Random environmental data simulation
+simulate_environmental <- function(ndata, dat, po2_lim, temp_lim, depth_lim){
+  ##Set seed
+  seed <- sample(1:1000, 1)
+  set.seed(seed)
+  ##Simulate oxygen and temperature data
+  #Get variance covariances of depth, temperature and po2
+  env.dat <- dplyr::select(dat, "po2", "depth", "temp")
+  var.covar <- var(log(env.dat))
+  env.bar <- as.matrix(colMeans(log(env.dat)))
+  #Simulate from MVN
+  log.env <- matrix(nrow=ndata, ncol=3, NA)
+  colnames(log.env) <- c("po2", "depth", "temp")
+  #Random generation of environmental data, with constraints
+  for (i in 1:ndata){
+    log.env[i,] <- rmvnorm(n = 1, mean=(env.bar - diag(var.covar) / 2), sigma=(var.covar), method="eigen")
+    while(log.env[i,1]>log(po2_lim) | log.env[i,2]>log(depth_lim)| log.env[i,3]>log(temp_lim)){
+      log.env[i,] <- rmvnorm(n = 1, mean=(env.bar - diag(var.covar) / 2), sigma=(var.covar), method="eigen")
+    }
+  }
+  #Exponentiate
+  env <- as.data.frame(exp(log.env))
+  ##Metabolic Index
+  #Constants
+  #Ao <- 1.81
+  #n <- -0.12
+  #B = 1000 # size in grams, roughly average
+  #avgbn <-B^n  # this works for the adult class (0.5 - 6 kg).  for the large adult, adjust
+  kelvin = 273.15
+  boltz = 0.000086173324
+  tref <- 12
+  #Calculate inverse temp
+  env$invtemp <- (1 / boltz)  * ( 1 / (env$temp + 273.15) - 1 / (tref + 273.15))
+  #Calculate MI
+  env$mi = env$po2*exp(0.3* env$invtemp)
+  
+  ##Add variables to dataset
+  #La/lon
+  env$X <- dat$latitude
+  env$Y <- dat$longitude
+  #Year
+  env$year <- dat$year
+  ##Log and scale depth
+  env$log_depth <- log(env$depth)
+  env$log_depth_scaled <- scale(env$log_depth)
+  env$log_depth_scaled2 <- env$log_depth_sc ^ 2
+  ##Scale mi and oxygen, just in case
+  env$mi_s <- scale(env$mi)
+  env$po2_s <- scale(env$po2)
+  #Seed
+  env$seed <- seed
+  return(env)
+}
+
+##Run environmental data simulation
+n <- 25 #Number of simulations
+ndata <- nrow(dat) #Number of data points
+#Environmental data limits
+po2_lim <- 35
+temp_lim <-15
+depth_lim <- 1500
+#Simulate data
+env_sims <- map(seq_len(n), ~simulate_environmental(ndata, dat, po2_lim, temp_lim,depth_lim)) 
+
+#Simulate fish data
+simdat_ran <- lapply(env_sims, simulate_fish,
+                     mesh = mesh,
+                     s50 = s50,
+                     delta = delta,
+                     smax = smax,
+                     modelpars = model.pars)
+simdat_ran <- lapply(env_sims, simulate_fish2,
+                     mesh = mesh,
+                     s50 = s50,
+                     delta = delta,
+                     smax = smax,
+                     modelpars = model.pars2)
+
+fits <- lapply(simdat_ran, run_sdmTMB_noprior, 
+               start=start, mesh=mesh)
 
 
+pars1 <- lapply(fits, extract_pars)
+pars1 <- clean_pars(pars1, fits=fits)
 
+ggplot(subset(pars1, term=="mi_s-smax"), aes(y=estimate, x=id)) +
+  geom_point()+geom_errorbar(aes(ymin = estimate - std.error,max = estimate + std.error))+ 
+  geom_hline(yintercept=smax, colour="red")+
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())+
+  ggtitle("smax")
+
+ggplot(subset(pars1, term=="mi_s-s50"), aes(y=estimate, x=id)) +
+  geom_point()+geom_errorbar(aes(ymin = estimate - std.error,max = estimate + std.error))+ 
+  geom_hline(yintercept=s50, colour="red")+
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())+
+  ggtitle("s50")
+
+ggplot(subset(pars1, term=="mi_s-s95"), aes(y=estimate, x=id)) +
+  geom_point()+geom_errorbar(aes(ymin = estimate - std.error,max = estimate + std.error))+ 
+  geom_hline(yintercept=delta, colour="red")+
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())+
+  ggtitle("s95 (really delta)")
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -196,3 +293,6 @@ m3 <- sdmTMB(cpue_kg_km2 ~ -1+year+logistic(mi_s)+log_depth_scaled+log_depth_sca
                newton_loops = 2,
                nlminb_loops=2))
 summary(m3)
+
+
+

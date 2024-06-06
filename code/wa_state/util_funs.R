@@ -8,6 +8,7 @@ install.packages("gsw")
 library(gsw)
 library(dplyr)
 library(readxl)
+library(stringr)
 
 #Get scientific name from itis number
 extract_name <- function(x){
@@ -1436,7 +1437,7 @@ run_sdmTMB <- function(formula, dat, start, spc){
 
 ##Function to run model and return list of model outputs
 run_sdmTMB_noprior <- function(simdat, start, mesh) {
-  m2 <- try(sdmTMB(sim ~ -1+as.factor(year)+logistic(mi_usual_s)+log_depth_scaled+log_depth_scaled2, 
+  m2 <- try(sdmTMB(sim ~ -1+as.factor(year)+logistic(mi_s)+log_depth_scaled+log_depth_scaled2, 
                    data = simdat, 
                    spatial = "on",
                    spatiotemporal="off",
@@ -1451,9 +1452,26 @@ run_sdmTMB_noprior <- function(simdat, start, mesh) {
   try(return(m2))
 }
 
+run_sdmTMB_noprior2 <- function(simdat, start, mesh) {
+  m2 <- try(sdmTMB(sim ~ -1+as.factor(year)+logistic(mi_s)+log_depth_scaled+log_depth_scaled2, 
+                   data = simdat, 
+                   spatial = "off",
+                   spatiotemporal="off",
+                   mesh=mesh,
+                   family =tweedie(link="log"),
+                   control = sdmTMBcontrol(
+                     start = list(b_threshold = start),
+                     #lower = list(b_threshold = c(-Inf, -Inf, -Inf, -Inf)), 
+                     # upper = list(b_threshold = c(Inf, Inf, 100, Inf)),
+                     newton_loops = 2)))
+  try(tidy(m2))
+  try(return(m2))
+}
+
+
 simulate_fish<- function(dat,mesh, s50, delta, smax, modelpars) {
   seed <- sample(1:1000, 1)
-  sim <- sdmTMB_simulate(formula=~-1+as.factor(year)+logistic(mi_usual_s)+log_depth_scaled+log_depth_scaled2,
+  sim <- sdmTMB_simulate(formula=~-1+as.factor(year)+logistic(mi_s)+log_depth_scaled+log_depth_scaled2,
                          data=dat,
                          family=tweedie(link="log"),
                          tweedie_p=p,
@@ -1467,4 +1485,46 @@ simulate_fish<- function(dat,mesh, s50, delta, smax, modelpars) {
                          seed=seed)
   dat$sim <- sim$observed
   return(dat)
+}
+
+simulate_fish2<- function(dat,mesh, s50, delta, smax, modelpars) {
+  seed <- sample(1:1000, 1)
+  sim <- sdmTMB_simulate(formula=~-1+as.factor(year)+logistic(mi_s)+log_depth_scaled+log_depth_scaled2,
+                         data=dat,
+                         family=tweedie(link="log"),
+                         tweedie_p=p,
+                         phi=phi,
+                         range=NULL,
+                         sigma_O=NULL,
+                         sigma_E=NULL,
+                         mesh=mesh,
+                         threshold_coefs=c(s50, delta, smax),
+                         B=c(b_years, beta1, beta2),
+                         seed=seed)
+  dat$sim <- sim$observed
+  return(dat)
+}
+
+## Functions for extracting parameter estimates and diagnostics ##
+# Extract parameter estimates #
+extract_pars <- function(x){
+  if(!is.character(x)){
+    par_estimates <- as.data.frame(tidy(x, conf.int = TRUE, effects="fixed"))
+    par_estimates_rand <- as.data.frame(tidy(x, conf.int = TRUE, effects="ran_pars"))
+    par_estimates <- bind_rows(par_estimates, par_estimates_rand)
+    return(par_estimates)
+  }
+  if(is.character(x)){
+    return(NA)
+  }
+}
+
+# Function to clean up pars for plotting #
+clean_pars <- function(pars, fits){
+  names(pars) <- c(1:length(fits))
+  #Remove models with errors
+  pars <- keep(pars, function(x) !is.logical(x))
+  #Combine into single dataframe, with column of simulation number
+  pars <- bind_rows(pars,.id="id")
+  return(pars)
 }
