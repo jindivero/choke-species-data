@@ -82,7 +82,7 @@ nc_bottom_all <- nc_bottom_all %>% mutate(time=as_datetime("1950-01-01 00:00:00"
 #Save
 saveRDS(nc_bottom_all, file="glorys_o2_wc_full_region_bottom.rds.rds")
 nc_bottom_all2 <- nc_bottom_all
-nc_bottom_all2 <- as.data.frame(readRDS("~/Dropbox/choke species/code/choke-species-data/data/glorys/full_regions_bottom/glorys_o2_wc_full_region_bottom.rds"))
+nc_bottom_all2 <- as.data.frame(readRDS("~/Dropbox/choke species/code/choke-species-data/data/glorys/full_regions_bottom/glorys_o2_wc_full_region_bottom.rds.rds"))
 
 ##Match to survey data
 #Extract out for each haul the closest matching lat and lon
@@ -97,12 +97,12 @@ nc_bottom_all2 <- unique(nc_bottom_all2)
 colnames(nc_bottom_all2) <- c("no3_glorys", "o2_glorys", "po4_glorys", "chl_glorys", "si_glorys", "nppv_glorys", "lon_gloryso2", "lat_gloryso2", "depth_gloryso2", "date_gloryso2")
 colnames(points) <- c("lat_gloryso2", "lon_gloryso2", "date_gloryso2")
 nc_bottom_all4 <- left_join(points, nc_bottom_all2)
-
 glorys_wc <- bind_cols(nc_bottom_all4, haul_combined)
 saveRDS(glorys_wc, file="glorys_o2_WC.rds")
 
 ###Temperature 
 ###GLORYS Temperature and salinity 
+
 combined <- "cdo mergetime *.nc glorys_tempsal_1993_2021_raw.nc"
 system(combined)
 
@@ -140,7 +140,7 @@ nc_bottom_all2 <- nc_bottom_all
 nc_bottom_all2 <- unique(nc_bottom_all2)
 
 saveRDS(nc_bottom_all2, file="glorys_tempsal_wc_full_region_bottom.rds")
-#nc_bottom_all2 <- readRDS("~/Dropbox/choke species/code/choke-species-data/data/glorys/full_regions_bottom/glorys_tempsal_wc_full_region_bottom.rds")
+nc_bottom_all2 <- readRDS("~/Dropbox/choke species/code/choke-species-data/data/glorys/full_regions_bottom/glorys_tempsal_wc_full_region_bottom.rds")
 
 ##Match to survey data
 
@@ -155,4 +155,5 @@ nc_bottom_all2$time <- as.character(as.Date(nc_bottom_all2$time, format='%m/%d/%
 #Extract data
 nc_bottom_all4 <- left_join(points, nc_bottom_all2)
 colnames(nc_bottom_all4) <- c("lat_glorysphys", "lon_glorysphys", "date_glorysphys", "temp_glorys", "sal_glorys", "depth_glorysphys")
-saveRDS(nc_bottom_all4, file="glorys_tempsal_WC.rds")
+glorys_wc <- bind_cols(nc_bottom_all4, haul_combined)
+saveRDS(glorys_wc, file="glorys_tempsal_WC.rds")
