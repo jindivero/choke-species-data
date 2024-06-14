@@ -46,13 +46,13 @@ haul_combined <- bind_rows(nwfsc_haul, IPHC)
 
 ##More housekeeping
 #Restrict to coordinates of WC
-haul_combined <- subset(haul_combined, lat_start<=48 & lon_start>=-125)
+haul_combined <- subset(haul_combined, lat_start<=49)
 #Isolate just date
 haul_combined$date2 <- as.POSIXct(substr(haul_combined$date, 1,11))
 #Restrict to only years that we have GLORYS data for
 haul_combined <- subset(haul_combined, date2>as.POSIXct("1993-01-01"))
 #Remove 2022 (only have GLORYS data for 2021)
-haul_combined <- subset(haul_combined, date2<as.POSIXct("2020-12-31"))
+haul_combined <- subset(haul_combined, date2<as.POSIXct("2021-12-31"))
 
 ###oxygen
 setwd("~/Dropbox/choke species/code/Copernicus/o2/nwfsc")
@@ -83,6 +83,35 @@ nc_bottom_all <- nc_bottom_all %>% mutate(time=as_datetime("1950-01-01 00:00:00"
 saveRDS(nc_bottom_all, file="glorys_o2_wc_full_region_bottom.rds.rds")
 nc_bottom_all2 <- nc_bottom_all
 nc_bottom_all2 <- as.data.frame(readRDS("~/Dropbox/choke species/code/choke-species-data/data/glorys/full_regions_bottom/glorys_o2_wc_full_region_bottom.rds.rds"))
+
+##Extra slice
+setwd("~/Dropbox/choke species/code/Copernicus/o2/nwfsc/")
+
+#Combine all the separate files into one
+combined <- "cdo mergetime *.nc glorys_o2_wc2_1993_2021_raw.nc"
+system(combined)
+
+##Look at dimensions to get time and variables
+file <- ("glorys_o2_wc2_1993_2021_raw.nc")
+nc_ds <-  ncdf4::nc_open(file)
+nc_open(file)
+names(nc_ds$dim) #display dimensions
+names(nc_ds$var) #display variables
+
+#Get depths and times
+nc <- tidync(file)
+depths <- nc %>% activate("D1") %>% hyper_tibble()
+times <- nc %>% activate("D0") %>% hyper_tibble()
+
+# apply to all time steps and bind into a combined df
+nc_bottom_all <- purrr::map_df(times$time,extract_bottom_vars)
+
+#Convert time to calendar day
+nc_bottom_all <- nc_bottom_all %>% mutate(time=as_datetime("1950-01-01 00:00:00")+hours(time))
+
+#Save
+saveRDS(nc_bottom_all, file="glorys_o2_wc_full_region_bottom.rds.rds")
+nc_bottom_all2 <- nc_bottom_all
 
 ##Match to survey data
 #Extract out for each haul the closest matching lat and lon

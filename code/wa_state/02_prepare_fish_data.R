@@ -10,7 +10,7 @@ setwd("/Users/jindiv/Library/CloudStorage/Dropbox/choke species/code/choke-speci
 sci_name <- "anoplopoma fimbria" 
 spc <- "sablefish" 
 
-dat <- prepare_data(spc=spc, sci_name=sci_name)
+dat <- prepare_data(spc=spc, sci_name=sci_name, ROMS=F)
 
 #How many positive catches vs zero catches, and how many hauls with missing length data?
 positive_catches <- positive_catches(dat)

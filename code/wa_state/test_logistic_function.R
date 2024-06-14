@@ -38,6 +38,10 @@ sigma_O <- 0.01
 ### load helper functions ####
 ### Load Data ####
 
+#Plot real effect
+dat$logmu_real <- logfun_basic(mi=dat$mi_s, smax, s50, s95=delta)
+ggplot(dat, aes(x=mi_s, y=logmu_real))+geom_point()
+
 ##Pull real data (example sablefish data from Chapter 2) ## 
 dat <- readRDS("/Users/jindiv/Library/CloudStorage/Dropbox/choke species/code/choke-species-data/example_data.rds")
 #Clean up and add environmental data
@@ -92,7 +96,7 @@ simdat <- map(seq_len(n), ~simulate_fish(dat = dat,
                                            modelpars = model.pars))
 ### Fit model ###
 start <- matrix(data=c(-10, 2, 5), nrow=3,ncol=1)
-start <- matrix(data=c(s95, s50, smax), nrow=3,ncol=1)
+start <- matrix(data=c(delta, s50, smax), nrow=3,ncol=1)
 fits <- lapply(simdat, run_sdmTMB_noprior, 
                start=start, mesh=mesh)
 
@@ -124,6 +128,27 @@ ggplot(subset(pars1, term=="mi_s-s95"), aes(y=estimate, x=id)) +
         axis.ticks.x=element_blank())+
   ggtitle("s95 (really delta)")
 
+#Plot effect
+pars_wide <- pivot_wider(pars1, id_cols=c(id), names_from=term, values_from=estimate)
+logmus <- matrix(data=NA, nrow=nrow(dat), ncol=nrow(pars_wide))
+for (i in 1:nrow(pars_wide)){
+  logmus[,i] <- logfun_basic(mi=dat$mi_s, smax=pars_wide$`mi_s-smax`[i], s50=pars_wide$`mi_s-s50`[i], s95=pars_wide$`mi_s-s95`[i])
+}
+
+#Add mi
+logmus <- as.data.frame(logmus)
+logmus$mi_s <- dat$mi_s
+
+#Flip long
+logmus2 <- pivot_longer(logmus, 1:20)
+ggplot(logmus2, aes(x=mi_s, y=value))+geom_point(aes(group=name, colour=name))
+
+#Just one
+test <- logfun_basic(mi=dat$mi_s, smax=pars_wide$`mi_s-smax`[5], s50=pars_wide$`mi_s-s50`[5], s95=pars_wide$`mi_s-s95`[5])
+test <- as.data.frame(test)
+colnames(test) <- "effect"
+test$mi_s <- dat$mi_s
+ggplot(test, aes(x=mi_s, y=effect))+geom_point()
 
 #### Random environmental data simulation
 simulate_environmental <- function(ndata, dat, po2_lim, temp_lim, depth_lim){
@@ -234,6 +259,8 @@ ggplot(subset(pars1, term=="mi_s-s95"), aes(y=estimate, x=id)) +
         axis.ticks.x=element_blank())+
   ggtitle("s95 (really delta)")
 
+#Calculate effect and plot
+smax_test$logmu1 <- logfun_basic(smax_test$po2_prime, smax=5, s50=s50, delta)
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #Test with real data

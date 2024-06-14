@@ -26,6 +26,7 @@ extract_bottom_vars <- function(tstep){
     filter(depth==max(depth))
   nc_df
 }
+
 ####BC
 ###Load haul info for BC and IPHC
 pbs_haul <- readRDS("/Users/jindiv/Library/CloudStorage/Dropbox/choke species/code/choke-species-data/data/fish_raw/BC/pbs-haul.rds")
@@ -47,19 +48,24 @@ haul_combined <- bind_rows(pbs_haul, IPHC)
 ##More housekeeping
 #Restrict to southern latitudes of interest
 
-haul_combined <- subset(haul_combined, lat_start >=48 & lat_start<= 54 & lon_start >= -134 & lon_start <=-124)
+haul_combined <- subset(haul_combined, lat_start >=48 & lat_start<= 55 & lon_start >= -134 & lon_start <=-122)
 #Isolate just date
 haul_combined$date2 <- as.POSIXct(substr(haul_combined$date, 1,11))
 #Restrict to only years that we have GLORYS data for
 haul_combined <- subset(haul_combined, date2>as.POSIXct("1993-01-01"))
 #Remove 2022 (only have GLORYS data for 2021)
-haul_combined <- subset(haul_combined, date2<as.POSIXct("2020-12-31"))
+haul_combined <- subset(haul_combined, date2<as.POSIXct("2021-12-31"))
 
 ###GLORYS Temperature and salinity 
 ####Set wd
 setwd("~/Dropbox/choke species/code/Copernicus/temp_sal/jindivero/bc")
 combined <- "cdo mergetime *.nc glorys_tempsal_bc_1993_2021_raw.nc"
 system(combined)
+
+##Second chunk downloaded 
+setwd("~/Dropbox/choke species/code/Copernicus/temp_sal/jindivero/bc/bc2")
+combined2 <- "cdo mergetime *.nc glorys_tempsal_bc2_1993_2021_raw.nc"
+system(combined2)
 
 ##Look at dimensions to get time and variables
 file <- ("glorys_tempsal_bc_1993_2021_raw.nc")
@@ -88,6 +94,33 @@ nc_bottom_all2 <- unique(nc_bottom_all2)
 saveRDS(nc_bottom_all2, file="glorys_tempsal_bc_full_region_bottom.rds")
 nc_bottom_all2 <- readRDS("~/Dropbox/choke species/code/choke-species-data/data/glorys/full_regions_bottom/glorys_tempsal_bc_full_region_bottom.rds")
 
+setwd("~/Dropbox/choke species/code/Copernicus/temp_sal/jindivero/bc/bc2")
+file <- ("glorys_tempsal_bc2_1993_2021_raw.nc")
+nc_ds <-  ncdf4::nc_open(file)
+nc_open(file)
+names(nc_ds$dim) #display dimensions
+names(nc_ds$var) #display variables
+
+##Convert .nc to a readable file in R to match with survey data
+#Make a dataframe-formatted file
+nc <- tidync(file)
+
+#Get depths and times
+depths <- nc %>% activate("D1") %>% hyper_tibble()
+times <- nc %>% activate("D0") %>% hyper_tibble()
+
+# apply to all time steps and bind into a combined df
+nc_bottom_all_b <- purrr::map_df(times$time,extract_bottom_vars)
+
+#Convert time to calendar day
+nc_bottom_all_b <- nc_bottom_all_b %>% mutate(time=as_datetime("1950-01-01 00:00:00")+hours(time))
+
+saveRDS(nc_bottom_all_b, file="glorys_tempsal_bc2_full_region_bottom.rds")
+saveRDS(nc_bottom_all_b, file="glorys_tempsal_bc2_full_region_bottom.rds")
+
+nc_bottom_all2 <- bind_rows(nc_bottom_all, nc_bottom_all_b)
+nc_bottom_all2 <- distinct(nc_bottom_all2, longitude, latitude, time, .keep_all=TRUE)
+
 ##Match to survey data
 #Extract out for each haul the closest matching lat and lon
 # use nn2() to calculate min distance to nearest ROMS lat/long for each date
@@ -108,7 +141,13 @@ setwd("~/Dropbox/choke species/code/Copernicus/o2/bc")
 combined <- "cdo mergetime *.nc glorys_o2_bc_1993_2021_raw.nc"
 system(combined)
 
+setwd("~/Dropbox/choke species/code/Copernicus/o2/bc/missing_bc")
+
+combined2 <- "cdo mergetime *.nc glorys_o2_bc2_1993_2021_raw.nc"
+system(combined2)
+
 ##Look at dimensions to get time and variables
+setwd("~/Dropbox/choke species/code/Copernicus/o2/bc")
 file <- ("glorys_o2_bc_1993_2021_raw.nc")
 nc_ds <-  ncdf4::nc_open(file)
 nc_open(file)
@@ -137,8 +176,31 @@ nc_bottom_all <- nc_bottom_all %>% mutate(time=as_datetime("1950-01-01 00:00:00"
 
 #Save
 saveRDS(nc_bottom_all, file="glorys_o2_bc_full_region_bottom.rds")
-#nc_bottom_all2 <- readRDS("~/Dropbox/choke species/code/choke-species-data/data/glorys/full_regions_bottom/glorys_o2_bc_full_region_bottom.rds")
-nc_bottom_all2 <- nc_bottom_all
+nc_bottom_all <- readRDS("~/Dropbox/choke species/code/choke-species-data/data/glorys/full_regions_bottom/glorys_o2_bc_full_region_bottom copy.rds")
+
+##Convert .nc to a readable file in R to match with survey data
+#Make a dataframe-formatted file
+setwd("~/Dropbox/choke species/code/Copernicus/o2/bc/missing_bc")
+file <- ("glorys_o2_bc2_1993_2021_raw.nc")
+nc <- tidync(file)
+
+#Get depths and times
+depths <- nc %>% activate("D1") %>% hyper_tibble()
+times <- nc %>% activate("D0") %>% hyper_tibble()
+
+# apply to all time steps and bind into a combined df
+nc_bottom_all_b <- purrr::map_df(times$time,extract_bottom_vars)
+
+#Convert time to calendar day
+nc_bottom_all_b <- nc_bottom_all_b %>% mutate(time=as_datetime("1950-01-01 00:00:00")+hours(time))
+
+saveRDS(nc_bottom_all_b, file="~/Dropbox/choke species/code/choke-species-data/data/glorys/full_regions_bottom/glorys_o2_bc2_full_region_bottom.rds")
+nc_bottom_all_b <- readRDS("~/Dropbox/choke species/code/choke-species-data/data/glorys/full_regions_bottom/glorys_o2_bc2_full_region_bottom.rds")
+
+nc_bottom_all2 <- bind_rows(nc_bottom_all, nc_bottom_all_b)
+nc_bottom_all2$time <- as.character(as.Date(nc_bottom_all2$time, format='%m/%d/%Y'))
+nc_bottom_all2 <- distinct(nc_bottom_all2, latitude, longitude, time, .keep_all = TRUE)
+
 
 #Extract out for each haul the closest matching lat and lon
 # use nn2() to calculate min distance to nearest ROMS lat/long for each date
@@ -146,9 +208,72 @@ test <- RANN::nn2(nc_bottom_all2[, c('latitude', 'longitude')], haul_combined[, 
 points <- nc_bottom_all2[c(test$nn.idx),c("latitude", "longitude")]
 #Combine date and coordinates
 points$time <- as.character(haul_combined$date2)
+points <- as.data.frame(points)
 #Extract data
-nc_bottom_all2$time <- as.character(as.Date(nc_bottom_all2$time, format='%m/%d/%Y'))
 nc_bottom_all4 <- left_join(points, nc_bottom_all2)
 colnames(nc_bottom_all4) <- c("lat_gloryso2", "lon_gloryso2", "date_gloryso2", "no3_glorys", "o2_glorys", "po4_glorys", "chl_glorys","si_glorys", "nppv_glorys", "depth_gloryso2")
 glorys_bc <- bind_cols(nc_bottom_all4, haul_combined)
 saveRDS(glorys_bc, file="glorys_o2_BC.rds")
+
+#####Add in October data#################################################
+#Files
+setwd("~/Dropbox/choke species/code/Copernicus/temp_sal/jindivero/bc/bc3")
+combined2 <- "cdo mergetime *.nc glorys_tempsal_bc3_1993_2021_raw.nc"
+system(combined2)
+
+##Look at dimensions to get time and variables
+file <- ("glorys_tempsal_bc3_1993_2021_raw.nc")
+
+##Convert .nc to a readable file in R to match with survey data
+#Make a dataframe-formatted file
+nc <- tidync(file)
+
+#Get depths and times
+depths <- nc %>% activate("D1") %>% hyper_tibble()
+times <- nc %>% activate("D0") %>% hyper_tibble()
+
+# apply to all time steps and bind into a combined df
+nc_bottom_all <- purrr::map_df(times$time,extract_bottom_vars)
+
+#Convert time to calendar day
+nc_bottom_all <- nc_bottom_all %>% mutate(time=as_datetime("1950-01-01 00:00:00")+hours(time))
+nc_bottom_all2 <- nc_bottom_all
+nc_bottom_all2$time <- as.character(as.Date(nc_bottom_all2$time, format='%m/%d/%Y'))
+#nc_bottom_all2 <- distinct(nc_bottom_all2, latitude, longitude, time, .keep_all = TRUE)
+colnames(nc_bottom_all2) <- c("sal_glorys", "temp_glorys", "lon_glorysphys", "lat_glorysphys","depth_glorysphys", "date_glorysphys")
+
+#Save
+saveRDS(nc_bottom_all2, file="glorys_tempsal_bc3_full_region_bottom_octdates.rds")
+
+##Oxygen
+setwd("~/Dropbox/choke species/code/Copernicus/o2/bc/missing_bc_oct")
+combined2 <- "cdo mergetime *.nc glorys_o2_bc3_1993_2021_raw.nc"
+system(combined2)
+
+##Look at dimensions to get time and variables
+file <- ("glorys_o2_bc3_1993_2021_raw.nc")
+nc_ds <-  ncdf4::nc_open(file)
+nc_open(file)
+names(nc_ds$dim) #display dimensions
+names(nc_ds$var) #display variables
+
+##Convert .nc to a readable file in R to match with survey data
+#Make a dataframe-formatted file
+nc <- tidync(file)
+
+#Get depths and times
+depths <- nc %>% activate("D1") %>% hyper_tibble()
+times <- nc %>% activate("D0") %>% hyper_tibble()
+
+# apply to all time steps and bind into a combined df
+nc_bottom_all <- purrr::map_df(times$time,extract_bottom_vars)
+
+#Convert time to calendar day
+nc_bottom_all <- nc_bottom_all %>% mutate(time=as_datetime("1950-01-01 00:00:00")+hours(time))
+nc_bottom_all2 <- nc_bottom_all
+nc_bottom_all2$time <- as.character(as.Date(nc_bottom_all2$time, format='%m/%d/%Y'))
+#nc_bottom_all2 <- distinct(nc_bottom_all2, latitude, longitude, time, .keep_all = TRUE)
+nc_bottom_all2 <- as.data.frame(nc_bottom_all2)
+colnames(nc_bottom_all2) <- c("chl_glorys","no3_glorys",  "nppv_glorys", "o2_glorys", "po4_glorys","si_glorys","lon_gloryso2", "lat_gloryso2", "depth_gloryso2","date_gloryso2")
+#Save
+saveRDS(glorys_bc_oct, file="glorys_o2_bc3_full_region_bottom_octdates.rds")

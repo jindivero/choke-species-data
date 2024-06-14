@@ -1246,7 +1246,7 @@ gsw_O2sol_SP_pt <- function(sal,pt) {
   return(O2sol)
 }
 
-prepare_data <- function(spc,sci_name){
+prepare_data <- function(spc,sci_name, ROMS){
 dat.by.size <- try(length_expand_bc(sci_name))
 gc()
 if(is.data.frame(dat.by.size)){
@@ -1318,6 +1318,7 @@ if(spc=="pacific halibut"){
 #sci_names <- c("")
 #spcs <- c("")
 
+if(ROMS==T){
 #Combine with ROMS data
 ROMS <- as.data.frame(readRDS("data/haul_combined_ROMS.rds"))
 ROMS2 <- as.data.frame(ROMS[,c("event_id","o2_ROMS", "temp_ROMS", "sal_ROMS")])
@@ -1337,15 +1338,31 @@ dat <- subset(dat, year<2022)
 dat$o2_ROMS <- ifelse(dat$o2_ROMS>=0, dat$o2_ROMS, NA)
 dat$temp_ROMS <- ifelse(dat$temp_ROMS>=0, dat$temp_ROMS, NA)
 dat$sal_ROMS <- ifelse(dat$sal_ROMS>=0, dat$sal_ROMS, NA)
+}
+
+###Add glorys data
+glorys <- readRDS("/Users/jindiv/Library/CloudStorage/Dropbox/choke species/code/choke-species-data/data/glorys_combined.rds")
+#Isolate just variables of interest
+glorys <- glorys[,c("o2_glorys", "temp_glorys", "sal_glorys", "date_haul", "event_id", "stlkey", "depth_gloryso2")]
+#Combine stlkey and event_id
+glorys$event_id <- ifelse(is.na(glorys$event_id), glorys$stlkey, glorys$event_id)
+glorys$stlkey <- NULL
+glorys$event_id <- as.character(glorys$event_id)
+
+#Combine glorys with data
+dat <- left_join(dat4, glorys, by="event_id")
+
+#Remove before 1993 and after 2020
+dat <- subset(dat, dat$year=="1993"|dat$year=="1994"|dat$year=="1995"|dat$year=="1996"|dat$year=="1997"|dat$year=="1998"|dat$year=="1999"|dat$year=="2000"|dat$year=="2001"|dat$year=="2002"|dat$year=="2003"|dat$year=="2004"|dat$year=="2005"|dat$year=="2006"|dat$year=="2007"|dat$year=="2008"|dat$year=="2009"|dat$year=="2010"|dat$year=="2011"|dat$year=="2012"|dat$year=="2013"|dat$year=="2014"|dat$year=="2015"|dat$year=="2016"|dat$year=="2017"|dat$year=="2018"|dat$year=="2019"|dat$year=="2020")
 
 ## Convert oxygen from ROMS concentration (mmol/m^3) to kPa
-dat$po2 <- calc_po2_sat(salinity=dat$sal_ROMS, temp=dat$temp_ROMS, depth=dat$depth_m, oxygen=dat$o2_ROMS, lat=dat$lat, long=dat$long, umol_m3=T, ml_L=F)
+dat$po2 <- calc_po2_sat(salinity=dat$sal_glorys, temp=dat$temp_glorys, depth=dat$depth_gloryso2, oxygen=dat$o2_glorys, lat=dat$lat, long=dat$long, umol_m3=T, ml_L=F)
 
 ##Calculate inverse temp
 kelvin = 273.15
 boltz = 0.000086173324
 tref <- 12
-dat$invtemp <- (1 / boltz)  * ( 1 / (dat$temp_ROMS + 273.15) - 1 / (tref + 273.15))
+dat$invtemp <- (1 / boltz)  * ( 1 / (dat$temp_glorys + 273.15) - 1 / (tref + 273.15))
 
 ##Calculate Metabolic index 
 #Pull parameters ((pulled in code file 2a))
@@ -1367,8 +1384,8 @@ dat$mi3 <- calc_mi(Eo3, Ao, dat$mean_weight, n, dat$po2, dat$invtemp)
 dat$mi5 <- calc_mi(Eo1, Ao, dat$haul_weight,  n, dat$po2, dat$invtemp)
 
 ##Scale and such
-dat$temp_s <- (scale(dat$temp_ROMS))
-dat$po2_s <- (scale(dat$o2_ROMS))
+dat$temp_s <- (scale(dat$temp_glorys))
+dat$po2_s <- (scale(dat$o2_glorys))
 dat$mi1_s <-(scale(dat$mi1))
 dat$mi2_s <-(scale(dat$mi2))
 dat$mi3_s <-(scale(dat$mi3))
@@ -1527,4 +1544,16 @@ clean_pars <- function(pars, fits){
   #Combine into single dataframe, with column of simulation number
   pars <- bind_rows(pars,.id="id")
   return(pars)
+}
+
+#Basic function to calculate logistic threshold
+logfun_basic <- function(mi, smax, s50, s95){
+  delta <- s95
+  s50 <- s50
+  a <- log(smax / (log(0.5) + smax) - 1)
+  b <- log(smax / (log(0.95) + smax) - 1)
+  beta0 <- -a + s50 * (b - a) / delta
+  beta1 <- (a - b) / delta
+  logmu <- exp(smax * (1 / ( 1 + exp( - beta0 - beta1 * mi)) -1))
+  return(logmu)
 }
