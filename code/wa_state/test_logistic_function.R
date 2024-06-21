@@ -38,10 +38,6 @@ sigma_O <- 0.01
 ### load helper functions ####
 ### Load Data ####
 
-#Plot real effect
-dat$logmu_real <- logfun_basic(mi=dat$mi_s, smax, s50, s95=delta)
-ggplot(dat, aes(x=mi_s, y=logmu_real))+geom_point()
-
 ##Pull real data (example sablefish data from Chapter 2) ## 
 dat <- readRDS("/Users/jindiv/Library/CloudStorage/Dropbox/choke species/code/choke-species-data/example_data.rds")
 #Clean up and add environmental data
@@ -64,6 +60,10 @@ dat$X <- dat$longitude
 dat$Y <- dat$latitude
 dat$cpue_kg_km2 <- dat$cpue_kg_km2 * (dat$p2+dat$p3)
 dat$year <- as.factor(dat$year)
+
+#Plot real effect
+dat$logmu_real <- logfun_basic(mi=dat$mi_s, smax, s50, s95=delta)
+ggplot(dat, aes(x=mi_s, y=logmu_real))+geom_point()
 
 ### Fish density distribution simulation ####
 
@@ -262,6 +262,19 @@ ggplot(subset(pars1, term=="mi_s-s95"), aes(y=estimate, x=id)) +
 #Calculate effect and plot
 smax_test$logmu1 <- logfun_basic(smax_test$po2_prime, smax=5, s50=s50, delta)
 
+#Test with updated data
+sci_name <- "anoplopoma fimbria" 
+spc <- "sablefish" 
+
+dat <- prepare_data(spc=spc, sci_name=sci_name, ROMS=F)
+#Remove outliers catch > 10 sd above the mean
+dat$cpue_s <- scale(dat$cpue_kg_km2_sub)
+dat <- dplyr::filter(dat, cpue_s <=20)
+
+
+
+
+
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #Test with real data
 #Constrain depth?
@@ -289,7 +302,7 @@ mesh <- make_mesh(dat, xy_cols = c("X", "Y"), n_knots = 250)
 init_vals <- get_inits()
 start <- matrix(data=c(-1, 0.25, 100), nrow=3,ncol=1)
 
-m3 <- sdmTMB(cpue_kg_km2 ~ -1+year+logistic(po2_s)+log_depth_scaled+log_depth_scaled2,
+m3 <- sdmTMB(cpue_kg_km2 ~ -1+year+logistic(mi_s)+log_depth_scaled+log_depth_scaled2,
              data = dat, 
              spatial = "on",
              mesh=mesh,

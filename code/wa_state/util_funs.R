@@ -10,6 +10,9 @@ library(dplyr)
 library(readxl)
 library(stringr)
 
+#Convert a scaled variable back to its original
+back.convert <- function(x, mean_orig, sd_orig) (x* sd_orig+mean_orig)
+
 #Get scientific name from itis number
 extract_name <- function(x){
   last_row <- x[nrow(x), ]
@@ -399,9 +402,13 @@ length_expand_afsc <- function(sci_name) {
   #Dataset already includes only Good and Satisfactory hauls, Unsatisfactory are removed
   
   #If years=T in the function, this will subset data to 1999 onward to remove possibly funky data prior to 1999
-  years <- T
+  years <- F
   if(years){
-  dat_sub = dplyr::filter(dat, year>1998)
+  dat_sub = dplyr::filter(dat, year>1999)
+  }
+  
+  if(!years){
+    dat_sub = dat
   }
   
   #Add column counting number of length observations per catch
@@ -545,8 +552,6 @@ length_expand_afsc <- function(sci_name) {
       p2 <- sum(p_w_byweight[smoothed_w$x>sizethresholds[1] & smoothed_w$x <=sizethresholds[2]])
       p3 <- sum(p_w_byweight[smoothed_w$x>sizethresholds[2] & smoothed_w$x <=sizethresholds[3]])
       p4 <- sum(p_w_byweight[smoothed_w$x>sizethresholds[3]])
-      
-      
       
       p[i,2:5] <- c(p1, p2, p3, p4)
       
@@ -1177,12 +1182,11 @@ IPHC <- function (catch, adjustment) {
 }
    
 calc_po2_sat <- function(salinity, temp, depth, oxygen, lat, long, umol_m3, ml_L) {
-  #calculate percent saturation for O2 - assumes  units of mL O2/L
   # Input:       S = Salinity (pss-78)
   #              T = Temp (deg C) ! use potential temp
   #depth is in meters
   
-  #O2 from trawl data is in ml/l, and Pena et al. ROMS is in mmol/L may need to be converted to umol/kg
+  #Pena et al. ROMS and GLORYS are in mmol per m^3 (needs to be converted to umol per kg) (o2 from trawl data was in mL/L, so had to do extra conversions)
   gas_const = 8.31
   partial_molar_vol = 0.000032
   kelvin = 273.15
@@ -1199,8 +1203,8 @@ calc_po2_sat <- function(salinity, temp, depth, oxygen, lat, long, umol_m3, ml_L
   
   SA = gsw_SA_from_SP(salinity,depth,long,lat) #absolute salinity for pot T calc
   pt = gsw_pt_from_t(SA,temp,depth) #potential temp at a particular depth
-  #CT = gsw_CT_from_t(SA,temp,depth) #conservative temp
   #this is for if using data that has oxygen in ml/L
+  #CT = gsw_CT_from_t(SA,temp,depth) #conservative temp
   #sigma0 = gsw_sigma0(SA,CT)
  # o2_umolkg = oxygen*44660/(sigma0+1000) 
   
@@ -1353,9 +1357,9 @@ glorys$event_id <- as.character(glorys$event_id)
 dat <- left_join(dat4, glorys, by="event_id")
 
 #Remove before 1993 and after 2020
-dat <- subset(dat, dat$year=="1993"|dat$year=="1994"|dat$year=="1995"|dat$year=="1996"|dat$year=="1997"|dat$year=="1998"|dat$year=="1999"|dat$year=="2000"|dat$year=="2001"|dat$year=="2002"|dat$year=="2003"|dat$year=="2004"|dat$year=="2005"|dat$year=="2006"|dat$year=="2007"|dat$year=="2008"|dat$year=="2009"|dat$year=="2010"|dat$year=="2011"|dat$year=="2012"|dat$year=="2013"|dat$year=="2014"|dat$year=="2015"|dat$year=="2016"|dat$year=="2017"|dat$year=="2018"|dat$year=="2019"|dat$year=="2020")
+dat <- subset(dat, dat$year=="1993"|dat$year=="1994"|dat$year=="1995"|dat$year=="1996"|dat$year=="1997"|dat$year=="1998"|dat$year=="1999"|dat$year=="2000"|dat$year=="2001"|dat$year=="2002"|dat$year=="2003"|dat$year=="2004"|dat$year=="2005"|dat$year=="2006"|dat$year=="2007"|dat$year=="2008"|dat$year=="2009"|dat$year=="2010"|dat$year=="2011"|dat$year=="2012"|dat$year=="2013"|dat$year=="2014"|dat$year=="2015"|dat$year=="2016"|dat$year=="2017"|dat$year=="2018"|dat$year=="2019")
 
-## Convert oxygen from ROMS concentration (mmol/m^3) to kPa
+## Convert oxygen from glorys concentration (mmol/m^3) to kPa
 dat$po2 <- calc_po2_sat(salinity=dat$sal_glorys, temp=dat$temp_glorys, depth=dat$depth_gloryso2, oxygen=dat$o2_glorys, lat=dat$lat, long=dat$long, umol_m3=T, ml_L=F)
 
 ##Calculate inverse temp
@@ -1380,7 +1384,7 @@ dat$mi1 <- calc_mi(Eo1, Ao, dat$mean_weight,  n, dat$po2, dat$invtemp)
 dat$mi2 <- calc_mi(Eo2, Ao, dat$mean_weight, n, dat$po2, dat$invtemp)
 dat$mi3 <- calc_mi(Eo3, Ao, dat$mean_weight, n, dat$po2, dat$invtemp)
 
-#For each body size
+#For average body size from each haul
 dat$mi5 <- calc_mi(Eo1, Ao, dat$haul_weight,  n, dat$po2, dat$invtemp)
 
 ##Scale and such
@@ -1396,7 +1400,7 @@ dat$jday_scaled2 <- with(dat, jday_scaled ^ 2)
 dat$X <- dat$long
 dat$Y <- dat$lat
 dat$cpue_kg_km2_sub <- dat$cpue_kg_km2 * (dat$p2+dat$p3)
-dat$year <- as.factor(dat$year)
+dat$cpue_kg_km2_sub <- ifelse(dat$cpue_kg_km2==0, 0, dat$cpue_kg_km2_sub)
 
 #Make broader region for BC
 dat$region<- ifelse(str_detect(dat$project, "SYN"), "BC", dat$project)
@@ -1411,12 +1415,14 @@ paste_reverse <- function(x, y) {
 positive_catches <- function(dat){
   missing <-  subset(dat, cpue_kg_km2==0)
   positive <- subset(dat, cpue_kg_km2>0)
+  total <- nrow(dat)
+  num_pos <- nrow(positive)
+  num_lengths <- nrow(subset(dat, p1>0))
   prop_positive <- nrow(positive)/nrow(dat)
   prop_missing <- nrow(missing)/nrow(dat)
-  total <- nrow(dat)
-  prop_no_length <- nrow(subset(dat, is.na(p1)))/total
-  summary <- matrix(data=c(prop_positive, prop_missing, prop_no_length, total), ncol=4, nrow=1)
-  colnames(summary) <- c("prop_positive", "prop_zero", "prop_no_lengths", "total_n_hauls")
+  prop_pos_length <- num_lengths/num_pos
+  summary <- matrix(data=c(total, num_pos, num_lengths, prop_positive, prop_missing, prop_pos_length), ncol=6, nrow=1)
+  colnames(summary) <- c("total_hauls", "total_positive_hauls", "total_hauls_with_length", "prop_positive_hauls", "prop_zero_hauls", "prop_hauls_length")
   return(summary)
 }
 

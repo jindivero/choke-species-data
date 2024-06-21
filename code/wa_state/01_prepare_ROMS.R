@@ -53,6 +53,7 @@ date <- as.POSIXct(ymd("1970-01-01") + dseconds(dim_time))
 #Convert 2D coordinates to 1D coordinates
 meta <- data.frame(id=1:length(dim_lon),lon=as.vector(dim_lon), lat=as.vector(dim_lat), depth=as.vector(depth), mask_rho=as.vector(mask_rho), mask_var=as.vector(mask_var))
 
+#Convert to correct format
 #Remove land and points poorly represented
 meta <- subset(meta, mask_rho==1)
 meta <- subset(meta, mask_var==1)

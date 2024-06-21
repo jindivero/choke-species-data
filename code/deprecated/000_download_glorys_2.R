@@ -2,8 +2,6 @@ install.packages("reticulate")
 library(reticulate)
 library(lubridate)
 
-
-
 #Create virtual environment and install copernismarine
 virtualenv_create(envname = "CopernicusMarine")
 
@@ -245,8 +243,8 @@ cmt$subset(
 outdir <- setwd("/Users/jindiv/Library/CloudStorage/Dropbox/choke species/code/Copernicus/o2/bc/missing_bc_oct") # set work directory
 
 cmt$subset(
-  dataset_id="cmems_mod_glo_bgc_my_0.25_P1D-m",
-  dataset_version="202112",
+  dataset_id="cmems_mod_glo_bgc_my_0.25deg_P1D-m",
+  dataset_version="202406",
   variables=list("chl", "no3", "nppv", "o2", "po4", "si"),
   minimum_longitude=-134,
   maximum_longitude=-124,
