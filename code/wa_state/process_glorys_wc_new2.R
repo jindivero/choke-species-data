@@ -145,6 +145,12 @@ for(i in 1:length(time_haul)){
 saveRDS(fingers_crossed, file="glorys_wc_tempsal_raw.rds")
 
 
+
+
+
+
+
+
 #Convert time to calendar day
 nc_bottom_all <- nc_bottom_all %>% mutate(time=as_datetime("1950-01-01 00:00:00")+hours(time))
 
