@@ -6,137 +6,56 @@ library(oce)
 library(tidyverse)
 library(respR)
 
-#load bathymetry data
-bathymetry <- read_csv('test_data/data/newport_hydrographic_line_bathymetry.csv',show_col_types = FALSE)
+# Get list of all files
 
-#load climatology data
-nc_data <- nc_open('test_data/data/newport_hydrographic_line_gridded_sections.nc')
+startpath <- "test_data/data/newport_hydrographic_line_station_data"
 
-# get time
-time <- ncvar_get(nc_data, "time")
-tunits <- ncatt_get(nc_data,"time","units")
-# get pressure
-pressure <- ncvar_get(nc_data, "pressure")
-# get latitude
-latitude <- ncvar_get(nc_data, "latitude")
-# get longitude
-longitude <- ncvar_get(nc_data, "longitude")-360
-# get temperature
-temperature <- ncvar_get(nc_data, "temperature")
-salinity <- ncvar_get(nc_data, "salinity")
-oxygen <- ncvar_get(nc_data, "dissolved_oxygen")
-fillvalue <- ncatt_get(nc_data, "temperature", "_FillValue")
-o2fillvalue <- ncatt_get(nc_data, "dissolved_oxygen", "_FillValue")
-salfillvalue <- ncatt_get(nc_data, "salinity", "_FillValue")
-temperature[temperature==fillvalue$value] <- NA
-oxygen[oxygen==o2fillvalue$value] <- NA
-salinity[salinity==salfillvalue$value] <- NA
+# get file names
+all_files <- dir(startpath)
+# get all dates
+newport_dates <- readRDS("test_data/data/newport_dates")
 
-# Need code to go through newport line data, for each station and sampling event, pull out deepest values
-# Create empty tibble
-newport_bottom <- as_tibble(date = NA,
-                            doy = NA,
-                            latitude = NA,
-                            longitude = NA,
-                            pressure = NA,
-                            temperature = NA,
-                            salinity = NA,
-                            pressure = pressure)
-n_dates <- length(calendar_date)
-n_stations <- dim(oxygen)[3]
-n_depths <- length(pressure)
+i =1
+all_files[1]
+
+bottom_ctd <- tibble(sample_date = newport_dates[1],
+                     NHL.station.number= numeric(),
+                     longitude..degW. = numeric(),
+                     pressure..dbar. = numeric(),           
+                     temperature..degC. = numeric(),
+                     practical.salinity = numeric(),
+                     potential.density..kg.m.3.= numeric(),
+                     spiciness..kg.m.3.= numeric(),
+                     dissolved.oxygen..ml.L.= numeric()
+)
 
 
-                            
-
-
-
-
-nc_close(nc_data)
-
-# convert time -- split the time units string into fields
-#tustr <- strsplit(tunits$value, " ")
-#tdstr <- strsplit(unlist(tustr)[3], "-")
-#tmonth <- as.integer(unlist(tdstr)[2])
-#tday <- as.integer(unlist(tdstr)[3])
-#tyear <- as.integer(unlist(tdstr)[1])
-#time <- chron(time,origin=c(tmonth, tday, tyear))
-
-calendar_date <- as.Date(time, origin="1970-01-01")
-doy <- as.POSIXlt(calendar_date, format = "%Y-%b-%d")$yday
-date <- as.POSIXlt(calendar_date, format = "%Y-%b-%d")
-
-newport_dat <- as_tibble(date = date,
-                         latitude = latitude,
-                         longitude = longitude,
-                         pressure = pressure,
-                         temperature = temperature,
-                         salinity = salinity,
-                         oxygen = oxygen,
-                         doy = doy
-                         )
-
-#extract July 8, 2021 transect
-d <- 556
-temperature_slice <- t(temperature[d,,])
-oxygen_slice <- t(oxygen[d,,])
-salinity_slice <- t(salinity[d,,])
-
-
-#plot July 8, 2021 transect
-par(mfrow=c(2,2))
-
-imagep(longitude, pressure, temperature_slice, col=cmocean('thermal'), breaks=seq(7, 14, .1), 
-       flipy=TRUE,  xlab="Longitude (?W)",  ylab="Pressure (dbar)", zlab=format(time[d], "%Y-%m-%dT%H:%M:%S"),
-       xlim=c(-124.65, -124.1))
-par(new=T)
-matplot(bathymetry[, 1]-360, bathymetry[, 2], type="l", xlab = '', xaxt='n', ylab = '', yaxt='n',
-        xlim=c(-124.65, -124.12), ylim=c(-150,0))
-
-imagep(longitude, pressure, oxygen_slice, col=cmocean('thermal'), breaks=seq(0, 9, .1), 
-       flipy=TRUE,  xlab="Longitude (?W)",  ylab="Pressure (dbar)", zlab=format(time[d], "%Y-%m-%dT%H:%M:%S"),
-       xlim=c(-124.65, -124.1))
-
-par(new=T)
-matplot(bathymetry[, 1]-360, bathymetry[, 2], type="l", xlab = '', xaxt='n', ylab = '', yaxt='n',
-        xlim=c(-124.65, -124.12), ylim=c(-150,0))
-
-imagep(longitude, pressure, salinity_slice, col=cmocean('thermal'), breaks=seq(30, 35, .5), 
-       flipy=TRUE,  xlab="Longitude (?W)",  ylab="Pressure (dbar)", zlab=format(time[d], "%Y-%m-%dT%H:%M:%S"),
-       xlim=c(-124.65, -124.1))
-par(new=T)
-matplot(bathymetry[, 1]-360, bathymetry[, 2], type="l", xlab = '', xaxt='n', ylab = '', yaxt='n',
-        xlim=c(-124.65, -124.12), ylim=c(-150,0))
-
-
-## Repeat for 2020
-#extract July 24, 2020 transect
-d <- 539
-temperature_slice <- t(temperature[d,,])
-oxygen_slice <- t(oxygen[d,,])
-salinity_slice <- t(salinity[d,,])
-
-#plot  transect
-par(mfrow=c(2,2))
-
-imagep(longitude, pressure, temperature_slice, col=cmocean('thermal'), breaks=seq(7, 14, .1), 
-       flipy=TRUE,  xlab="Longitude (?W)",  ylab="Pressure (dbar)", zlab=format(time[d], "%Y-%m-%dT%H:%M:%S"),
-       xlim=c(-124.65, -124.1))
-par(new=T)
-matplot(bathymetry[, 1]-360, bathymetry[, 2], type="l", xlab = '', xaxt='n', ylab = '', yaxt='n',
-        xlim=c(-124.65, -124.12), ylim=c(-150,0))
-
-imagep(longitude, pressure, oxygen_slice, col=cmocean('thermal'), breaks=seq(0, 9, .1), 
-       flipy=TRUE,  xlab="Longitude (?W)",  ylab="Pressure (dbar)", zlab=format(time[d], "%Y-%m-%dT%H:%M:%S"),
-       xlim=c(-124.65, -124.1))
-
-par(new=T)
-matplot(bathymetry[, 1]-360, bathymetry[, 2], type="l", xlab = '', xaxt='n', ylab = '', yaxt='n',
-        xlim=c(-124.65, -124.12), ylim=c(-150,0))
-
-imagep(longitude, pressure, salinity_slice, col=cmocean('thermal'), breaks=seq(30, 35, .5), 
-       flipy=TRUE,  xlab="Longitude (?W)",  ylab="Pressure (dbar)", zlab=format(time[d], "%Y-%m-%dT%H:%M:%S"),
-       xlim=c(-124.65, -124.1))
-par(new=T)
-matplot(bathymetry[, 1]-360, bathymetry[, 2], type="l", xlab = '', xaxt='n', ylab = '', yaxt='n',
-        xlim=c(-124.65, -124.12), ylim=c(-150,0))
+for (i in 1:length(all_files)) {
+  sample_date <- newport_dates[i]
+  file_string <- paste(startpath, "/", all_files[i], sep = "")
+  dat.2.use <- read.csv(file = file_string,
+                        skip = 1,
+                        header = T)
+  stations <- unique(dat.2.use$NHL.station.number)
+  n_stations <- length(stations)
+  
+  for (j in 1:n_stations) {
+    station_data <- dplyr::filter(dat.2.use, NHL.station.number == stations[j])
+    
+    # find lowest depth with O2 measurement
+    which_o2 <- which(!station_data$dissolved.oxygen..ml.L. == -9999)
+    # only proceed if there are oxygen measurements on this station
+    if (length(which_o2) > 0) {
+      lowest_data <- station_data[max(which_o2), ]
+      # Add sample date to the single data row
+      lowest_data <- lowest_data %>%
+        add_column(sample_date = sample_date, .before = "NHL.station.number")
+      # combine to dataframe
+      bottom_ctd <- bottom_ctd %>%
+        add_row(lowest_data)
+    }
+  }
+}
+    
+saveRDS(bottom_ctd, file = "test_data/data/newport_bottom.RDS")
+  
