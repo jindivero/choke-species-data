@@ -32,17 +32,49 @@ temperature[temperature==fillvalue$value] <- NA
 oxygen[oxygen==o2fillvalue$value] <- NA
 salinity[salinity==salfillvalue$value] <- NA
 
+# Need code to go through newport line data, for each station and sampling event, pull out deepest values
+# Create empty tibble
+newport_bottom <- as_tibble(date = NA,
+                            doy = NA,
+                            latitude = NA,
+                            longitude = NA,
+                            pressure = NA,
+                            temperature = NA,
+                            salinity = NA,
+                            pressure = pressure)
+n_dates <- length(calendar_date)
+n_stations <- dim(oxygen)[3]
+n_depths <- length(pressure)
+
+
+                            
+
+
+
+
 nc_close(nc_data)
 
 # convert time -- split the time units string into fields
-tustr <- strsplit(tunits$value, " ")
-tdstr <- strsplit(unlist(tustr)[3], "-")
-tmonth <- as.integer(unlist(tdstr)[2])
-tday <- as.integer(unlist(tdstr)[3])
-tyear <- as.integer(unlist(tdstr)[1])
-time <- chron(time,origin=c(tmonth, tday, tyear))
+#tustr <- strsplit(tunits$value, " ")
+#tdstr <- strsplit(unlist(tustr)[3], "-")
+#tmonth <- as.integer(unlist(tdstr)[2])
+#tday <- as.integer(unlist(tdstr)[3])
+#tyear <- as.integer(unlist(tdstr)[1])
+#time <- chron(time,origin=c(tmonth, tday, tyear))
 
-as.POSIXlt(time, format = "%Y-%b-%d")$yday
+calendar_date <- as.Date(time, origin="1970-01-01")
+doy <- as.POSIXlt(calendar_date, format = "%Y-%b-%d")$yday
+date <- as.POSIXlt(calendar_date, format = "%Y-%b-%d")
+
+newport_dat <- as_tibble(date = date,
+                         latitude = latitude,
+                         longitude = longitude,
+                         pressure = pressure,
+                         temperature = temperature,
+                         salinity = salinity,
+                         oxygen = oxygen,
+                         doy = doy
+                         )
 
 #extract July 8, 2021 transect
 d <- 556
