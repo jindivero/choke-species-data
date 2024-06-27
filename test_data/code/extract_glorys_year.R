@@ -5,7 +5,7 @@ library(dplyr)
 library(sdmTMB)
 library(seacarb)
 library(respR)
-
+library(ggplot2)
 basewd <- getwd()
 
 ### 1) Set WD to folder with raw GLORYS data
@@ -20,43 +20,39 @@ file <- "cmems_mod_glo_bgc_my_0.25deg_P1D-m_o2_138.00W-114.00W_26.00N-51.00N_0.5
 nc <- tidync(file)
 nc_df <- nc %>%
   hyper_tibble %>%
-  filter(depth >=30)
+  group_by(longitude, latitude) %>%
+  filter(depth == max(depth)) %>%
+  ungroup()
 # remove large list from memory
 rm(nc)
+
+
+# get unique days
+
+days <- unique(nc_df$time)
+n_days <- length(days)
+
+first_day <- days[1]
+last_day <- days[n_days]
+days.2.use <- seq(first_day, last_day, by = 10)
+
+nc_df <- nc_df %>%
+  filter(time %in% days.2.use)
 
 #Note: o2 is in umol per m^3 (i.e. umol per L)
 
 ### 4) Convert hours since January 1st, 1950 to normal human calendar date
 nc_df$time <- (as_datetime("1950-01-01")+hours(nc_df$time))
 
-### 5) Convert lat/lon to UTM - slower version
+### 5) Convert lat/lon to UTM -
 nc_df <- nc_df %>%
   st_as_sf(coords=c('longitude','latitude'),crs=4326,remove = F) %>%  
   st_transform(crs = "+proj=utm +zone=10 +datum=WGS84 +units=km") %>% 
   mutate(X=st_coordinates(.)[,1],Y=st_coordinates(.)[,2]) 
 
+nc_df$doy <- as.POSIXlt(nc_df$time, format = "%Y-%b-%d")$yday
 
-# add column for day of year (doy).  Will be the time variable
-red_day <- nc_df %>% distinct(time)
-red_day$doy <- as.POSIXlt(red_day$time, format = "%Y-%b-%d")$yday
 
-######Another way to get this by just extracting the time dimension that might be faster than running line 40:#######
-library(ncdf4)
-nc_ds <-  ncdf4::nc_open(file)
-dim_time <- ncvar_get(nc_ds, "time")
-red_day <- as.data.frame(as_datetime("1950-01-01")+hours(dim_time))
-colnames(red_day) <- "time"
-red_day$doy <- as.POSIXlt(red_day$time, format = "%Y-%b-%d")$yday
-##############################################
-
-nc_df$doy <- NA
-for (i in 1:nrow(red_day)) {
-  index <- which(nc_df$time == red_day$time[i])
-  nc_df$doy[index] <- red_day$doy[i]
-}
-
-#nc_df$doy <- as.POSIXlt(nc_df$time, format = "%Y-%b-%d")$yday
-#nc_df will be a dataframe with o2, latitude, longitude, depth, time, and lat & long in UTM
 
 ### 6) Make this a function and run for each year
 ##List of files for looping
@@ -94,25 +90,53 @@ newport_data$doy <- as.POSIXlt(newport_data$sample_date, format = "%Y-%b-%d")$yd
 newport_data$depth <- p2d(lat = newport_lat,
                           p = newport_data$pressure..dbar.)
 
-newport_data$o2 <-convert_DO(x = newport_data$dissolved.oxygen..ml.L.,
-                                                                from = "ml / l",
-                                                                to = "mmol / l",
-                                                                S = newport_data$practical.salinity,
-                                                                t = newport_data$temperature..degC.)
+
 # now get lat and long in UTC coordinates
 newport_data <- newport_data %>%
   st_as_sf(coords=c('longitude..degW.','latitude'),crs=4326,remove = F) %>%  
   st_transform(crs = "+proj=utm +zone=10 +datum=WGS84 +units=km") %>% 
   mutate(X=st_coordinates(.)[,1],Y=st_coordinates(.)[,2]) 
 
+newport_data <- as.data.frame(newport_data)
 
+
+
+# extract year and samples within time frame of model
+yearly_newport <- newport_data %>%
+  filter(year == 2019,
+         doy >= min(nc_df$doy),
+         doy <= max(nc_df$doy)
+  )
+source("test_data/code/convert_funs.R")
+yearly_newport$sigma <- calc_sigma( s = yearly_newport$practical.salinity,
+                                    t = yearly_newport$temperature..degC.,
+                                    p = yearly_newport$pressure..dbar.)
+yearly_newport$o2 <- convert_o2(yearly_newport$dissolved.oxygen..ml.L., yearly_newport$sigma)
+yearly_newport$o2_fun <- convert_DO(x = yearly_newport$dissolved.oxygen..ml.L.,
+                                    from = "ml /l", 
+                                    to = "umol / kg",
+                                    S = yearly_newport$practical.salinity,
+                                    t = yearly_newport$temperature..degC.)
 # setup sdmTMB
 nc_df <- as.data.frame(nc_df)
-spde <- make_mesh(data = nc_df, xy_cols = c("X","Y"), n_knots = 200)
-m1 <- sdmTMB(formula = o2  ~ 0 + s(depth) ,
+spde <- make_mesh(data = nc_df, xy_cols = c("X","Y"), n_knots = 250)
+m1 <- sdmTMB(formula = log(o2)  ~ 0 +  depth + +s(doy)  ,
              mesh = spde,
              data = nc_df, 
              family = gaussian(), 
-             time = "doy",
+#             time = "doy",
              spatial = "on",
-             spatiotemporal  = "ar1")
+             spatiotemporal  = "off")
+summary(m1)
+sanity(m1)
+
+newport_predict <- predict(m1, newdata = yearly_newport)
+
+
+ggplot(newport_predict, aes(log(o2), est, col = doy)) + 
+         geom_point()
+       
+
+ggplot(newport_predict, aes(o2, est, col = depth)) + 
+  geom_point()
+
