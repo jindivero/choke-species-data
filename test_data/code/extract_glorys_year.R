@@ -40,6 +40,15 @@ nc_df <- nc_df %>%
 red_day <- nc_df %>% distinct(time)
 red_day$doy <- as.POSIXlt(red_day$time, format = "%Y-%b-%d")$yday
 
+###Another way to get this by just extracting the time dimension that might be faster than running line 40:###
+library(ncdf4)
+nc_ds <-  ncdf4::nc_open(file)
+dim_time <- ncvar_get(nc_ds, "time")
+red_day <- as.data.frame(as_datetime("1950-01-01")+hours(dim_time))
+colnames(red_day) <- "time"
+red_day$doy <- as.POSIXlt(red_day$time, format = "%Y-%b-%d")$yday
+##############################################
+
 nc_df$doy <- NA
 for (i in 1:nrow(red_day)) {
   index <- which(nc_df$time == red_day$time[i])
@@ -98,6 +107,7 @@ newport_data <- newport_data %>%
 
 
 # setup sdmTMB
+nc_df <- as.data.frame(nc_df)
 spde <- make_mesh(data = nc_df, xy_cols = c("X","Y"), n_knots = 200)
 m1 <- sdmTMB(formula = o2  ~ 0 + s(depth) ,
              mesh = spde,
