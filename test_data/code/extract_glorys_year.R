@@ -137,6 +137,6 @@ ggplot(newport_predict, aes(log(o2), est, col = doy)) +
          geom_point()
        
 
-ggplot(newport_predict, aes(o2, est, col = depth)) + 
+ggplot(newport_predict, aes(log(o2), est, col = depth)) + 
   geom_point()
 
