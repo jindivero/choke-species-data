@@ -120,7 +120,7 @@ yearly_newport$o2_fun <- convert_DO(x = yearly_newport$dissolved.oxygen..ml.L.,
 # setup sdmTMB
 nc_df <- as.data.frame(nc_df)
 spde <- make_mesh(data = nc_df, xy_cols = c("X","Y"), n_knots = 250)
-m1 <- sdmTMB(formula = log(o2)  ~ 0 +  depth + +s(doy)  ,
+m1 <- sdmTMB(formula = log(o2)  ~ 0 +  s(depth) + +s(doy)  ,
              mesh = spde,
              data = nc_df, 
              family = gaussian(), 
