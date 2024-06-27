@@ -40,7 +40,7 @@ nc_df <- nc_df %>%
 red_day <- nc_df %>% distinct(time)
 red_day$doy <- as.POSIXlt(red_day$time, format = "%Y-%b-%d")$yday
 
-###Another way to get this by just extracting the time dimension that might be faster than running line 40:###
+######Another way to get this by just extracting the time dimension that might be faster than running line 40:#######
 library(ncdf4)
 nc_ds <-  ncdf4::nc_open(file)
 dim_time <- ncvar_get(nc_ds, "time")
