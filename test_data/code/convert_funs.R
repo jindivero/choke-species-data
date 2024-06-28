@@ -23,18 +23,5 @@ calc_sigma <- function(s, t, p) {
   return(sigma)
 }
 
-calc_sigma(s = yearly_newport$practical.salinity[1], 
-           t = yearly_newport$temperature..degC.[1],
-           p = yearly_newport$pressure..dbar.[1])
 # convert ml /l to umol / kg
-
 convert_o2 <- function(o2ml_l, sigma) (o2ml_l * 44.660)/((1000 + sigma)/1000)
-convert_o2(yearly_newport$dissolved.oxygen..ml.L.[1], calc_sigma(s = yearly_newport$practical.salinity[1], 
-                                                                 t = yearly_newport$temperature..degC.[1],
-                                                                 p = yearly_newport$pressure..dbar.[1])
-)
-
-yearly_newport$sigma <- calc_sigma( s = yearly_newport$practical.salinity,
-           t = yearly_newport$temperature..degC.,
-           p = yearly_newport$pressure..dbar.)
-yearly_newport$o2 <- convert_o2(yearly_newport$dissolved.oxygen..ml.L., yearly_newport$sigma)
