@@ -313,8 +313,7 @@ for (i in 2:length(glory_years)) {
 #Plot and compare:
 ggplot(tmp_predict2, aes(x=o2, y=exp(est)))+geom_point(colour="blue", size=3)+xlab("Newport Oxygen")+ylab("Predicted Oxygen")+geom_abline(slope=1, intercept=0)+
       geom_point(newport_predict, mapping=aes(x=o2, y=exp(est), size=3), colour="red")+
-      annotate(geom="text", x=280, y=50, label="GLORYS",color="red", size=10)+
-      annotate(geom="text", x=280, y=90, label="in situ",color="blue", size=10)+
+
   theme(legend.position="none")
 
 
@@ -367,14 +366,36 @@ for (i in 2:length(glory_years)) {
   
 }
 
+#Quick comparison 
+#Isolate IPHC data in the NWFSC zone
+IPHC <- subset(density_O2, latitude<49 & Survey=="IPHC")
+NWFSC <- subset(density_O2, Survey=="NOAA_West_Coast")
+NWFSC$o2_true <- NWFSC$O2_umolkg_ln
+NWFSC$O2_umolkg_ln <- NULL
+combined <- bind_rows(IPHC, NWFSC)
+IPHC <- as.data.frame(IPHC)
+combined <- as.data.frame(combined)
+spde <- make_mesh(data = combined, xy_cols = c("X","Y"), cutoff = 30)
 
+m_2 <- sdmTMB(formula = O2_umolkg_ln  ~ 0 + s(sigma_exp) + s(temperature_C) + s(p_dbar_ln) + s(month, bs = "cc", k = 4),
+              mesh = spde,
+              data = combined, 
+              family = gaussian(), 
+              #time = "year",
+              spatial = "on",
+              spatiotemporal  = "off")
 
+NWFSC <- as.data.frame(NWFSC)
+tmp_predict <- predict(m_2, newdata = NWFSC)
 
+ggplot(tmp_predict, aes(x=O2_umolkg, y=exp(est)))+geom_point(aes(colour=p_dbar))+xlab("NWFSC Observed Oxygen")+ylab("Predicted Oxygen from IPHC data")+geom_abline(slope=1, intercept=0)+facet_wrap("year")
 
+tmp_predict2 <- subset(tmp_predict, exp(est)< 1)
+ggplot(tmp_predict2, aes(x=X, y=Y))+geom_point(aes(colour=p_dbar))+facet_wrap("year")
 
-
-
-
+tmp_predict2 <- subset(tmp_predict, latitude>38.9)
+tmp_predict2 <- subset(tmp_predict, exp(est)>4)
+ggplot(tmp_predict2, aes(x=O2_umolkg, y=exp(est)))+geom_point(aes(colour=p_dbar))+xlab("NWFSC Observed Oxygen")+ylab("Predicted Oxygen from IPHC data")+geom_abline(slope=1, intercept=0)+facet_wrap("year")
 
 
 #############################
