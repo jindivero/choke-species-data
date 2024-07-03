@@ -1,5 +1,7 @@
 library(readxl)
 library(lubridate)
+install.packages("ggpubr")
+library(ggpubr)
 
 #Set ggplot themes 
 theme_set(theme_bw(base_size = 25))
@@ -169,3 +171,46 @@ ggplot(data = dat, aes(x = X, y = Y, colour=survey))+geom_point(size = 1, alpha 
 ggplot(data = dat, aes(x = X, y = Y, colour=as.factor(year)))+geom_point(size = 1, alpha = 0.3)+facet_wrap("survey")
 
 ggplot(data=dat, aes(x=year, fill=survey))+geom_bar()
+
+#Data availability
+#Count number of NAs 
+summary <- dat %>%
+  group_by(survey, year) %>%
+  summarize_at(c("salinity_psu", "depth", "temperature_C", "O2_umolkg"), ~(length(.x)-sum(is.na(.x))))
+
+#Plot
+ggplot(summary, aes(x=year, y=O2_umolkg,  group=survey, fill=survey))+geom_col()
+ggplot(summary, aes(x=year, y=depth,  group=survey, fill=survey))+geom_col()
+ggplot(summary, aes(x=year, y=salinity_psu,  group=survey, fill=survey))+geom_col()
+ggplot(summary, aes(x=year, y=temperature_C,  group=survey, fill=survey))+geom_col()
+
+
+#So what percentage are missing?
+summary2 <- dat %>%
+  group_by(survey, year) %>%
+  summarize_at(c("salinity_psu", "depth", "temperature_C", "O2_umolkg"), ~(1-(sum(is.na(.x)/length(.x)))))
+
+#Plot
+ggplot(summary2, aes(x=year, y=O2_umolkg,  group=survey, fill=survey))+geom_col()
+ggplot(summary2, aes(x=year, y=depth,  group=survey, fill=survey))+geom_col()
+ggplot(summary2, aes(x=year, y=salinity_psu,  group=survey, fill=survey))+geom_col()
+ggplot(summary, aes(x=year, y=temperature_C,  group=survey, fill=survey))+geom_col()
+
+summary3 <- dat %>%
+  group_by(survey, year) %>%
+  summarize_at(c("salinity_psu", "depth", "temperature_C", "do_mlpL"), ~(1-(sum(is.na(.x)/length(.x)))))
+
+summary3 <- as.data.frame(summary3)
+
+summary3 <- summary3 %>% complete(survey, year)
+summary3 <- summary3[,c(1:6)]
+
+#Pivot longer
+summary3b <- pivot_longer(summary3, 3:6)
+summary3b$value <- ifelse(is.na(summary3b$value), 0, summary3b$value)
+
+
+ggplot(summary3b, aes(x=year, y=value, fill=name))+geom_col()+facet_wrap("survey")+ylab("proportion of in situ observations with data available")
+
+
+
