@@ -124,7 +124,7 @@ m_8 <- sdmTMB(formula = O2_umolkg_ln  ~ 0  +as.factor(survey)+s(sigma0_exp)+ s(t
               spatiotemporal  = "IID")
 
 
-#Taking forever
+#Taking forever so gave up on AR1
 # m_5 <- sdmTMB(formula = O2_umolkg_ln  ~ 0 + s(sigma0_exp) + s(temperature_C) +  s(depth_ln) + s(month, bs = "cc", k = 4),
 #               mesh = spde,
 #               data = train, 
@@ -134,10 +134,12 @@ m_8 <- sdmTMB(formula = O2_umolkg_ln  ~ 0  +as.factor(survey)+s(sigma0_exp)+ s(t
 #               spatiotemporal  = "AR1")
 
 #AIC
+#Original comparison
 AIC(m_1, m_2, m_3, m_4, m_5, m_6)
+#Added a couple others
 AIC(m_6, m_7, m_8)
 
-#m_6 is best-fitting
+#m_8 is best-fitting (adding survey year, but m_6 does about as well on un-tested data)
 
 ##Refine doy smoother
 #Total number of days of year in dataset
@@ -160,7 +162,6 @@ test <- test %>% drop_na(temperature_C, depth_ln, month, sigma0_exp)
 test <- as.data.frame(test)
 
 #Predict onto test data
-
 O2_model <- m_8
 
 test_predict_O2 <- predict(O2_model, newdata = test)
@@ -292,6 +293,7 @@ density_O2 <- density_O2 %>% drop_na(temperature_C, depth_ln, month, sigma0_exp)
 #Separate training and testing region
 train <- density_O2
 train$O2_umolkg_ln <- ifelse(train$latitude>50| train$latitude <45, train$O2_umolkg_ln, NA)
+train <- train %>% drop_na(O2_umolkg_ln)
 test <- filter(density_O2, latitude<50 & latitude >45)
 
 train <- as.data.frame(train)
@@ -505,3 +507,88 @@ test_predict_O2 %>%
   ggplot(aes(x=latitude, y = longitude, color = resid))+
   geom_jitter()+
   scale_color_viridis_c()
+
+####Retrospective skills testing
+## Pull in combined in situ data
+density_O2 <- readRDS("insitu_combined.rds")
+
+#Log O2 and get DOY
+density_O2$O2_umolkg_ln <- log(density_O2$O2_umolkg)
+density_O2$depth_ln <- log(density_O2$depth)
+density_O2$sigma0_exp <- exp(density_O2$sigma0_kgm3)
+density_O2$doy <- as.POSIXlt(density_O2$date, format = "%Y-%b-%d")$yday
+
+#Remove alaska for now, until we figure out what's going on with the units
+density_O2 <- subset(density_O2, survey!="afsc")
+
+#Subset to data with DO available and no DO
+density_no_O2 <- density_O2 %>% 
+  filter(is.na(do_mlpL)| do_mlpL<=0)
+
+density_O2 <- density_O2 %>% 
+  filter(!is.na(do_mlpL), do_mlpL>0)
+
+#Remove NAs (was causing issues with smoother if had NAs)
+density_O2 <- density_O2 %>% drop_na(temperature_C, depth_ln, month, sigma0_exp)
+
+#Get list of years
+years <- unique(density_O2$year)
+years <- sort(years)
+
+preds <- list()
+for(i in 2:years){
+  year <- years[i]
+  train <- filter(density_O2, year<=year)
+  test <- filter(density_O2, year>year)
+  
+  train <- as.data.frame(train)
+  test <- as.data.frame(test)
+  spde <- make_mesh(data = train, xy_cols = c("X","Y"), cutoff = 30)
+  extra_time <- unique(sort(test$year))
+
+m <- try(sdmTMB(formula = O2_umolkg_ln  ~ 0 + s(sigma0_exp) + s(temperature_C) +  s(depth_ln) + s(doy),
+               mesh = spde,
+               data = train, 
+               family = gaussian(), 
+               time = "year",
+               spatial = "on",
+               extra_time=extra_time,
+               spatiotemporal  = "IID"))
+
+test_predict_O2 <- predict(O2_model, newdata = test)
+preds[[year]] <- test_predict_O2
+}
+
+
+##Try just one year
+train <- filter(density_O2, year<=2016)
+test <- filter(density_O2, year>2016)
+
+train <- as.data.frame(train)
+test <- as.data.frame(test)
+spde <- make_mesh(data = train, xy_cols = c("X","Y"), cutoff = 30)
+extra_time <- unique(sort(test$year))
+
+m <- try(sdmTMB(formula = O2_umolkg_ln  ~ 0 + s(sigma0_exp) + s(temperature_C) +  s(depth_ln) + s(doy),
+                mesh = spde,
+                data = train, 
+                family = gaussian(), 
+                time = "year",
+                spatial = "on",
+                extra_time=c(extra_time),
+                spatiotemporal  = "IID"))
+
+
+test_predict_O2 <- predict(m, newdata = test)
+
+rsq(test_predict_O2$O2_umolkg_ln, test_predict_O2$est)
+rmse(test_predict_O2$O2_umolkg_ln, test_predict_O2$est)/(max(test_predict_O2$O2_umolkg_ln)- min(test_predict_O2$O2_umolkg_ln))
+
+#Compare
+ggplot(test_predict_O2, aes(x = O2_umolkg, y = exp(est), colour=survey))+
+  geom_point(size=0.8)+
+  geom_abline(slope = 1, intercept = 0, color = 1)+
+  ylab("predicted O2")+
+  facet_wrap("year")+
+  ylim(0,400)
+
