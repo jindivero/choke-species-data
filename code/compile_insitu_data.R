@@ -158,11 +158,11 @@ us_coast_proj <- sf::st_transform(map_data, crs = 32610)
 
 # * 1000 b/c we are in UTM km for model fitting:
 xlimits = c(-282853, 1025581)
-ylimits = c(2349000, 7800000)
+ylimits = c(2349000, 7900000)
 
 ggplot(us_coast_proj) + geom_sf() +
   geom_point(data = dat, aes(x = X * 1000, y = Y * 1000, colour=survey), size = 2.0, alpha = 1.0) +
-#  scale_x_continuous(breaks = c(-150, -110), limits = xlimits) +
+  scale_x_continuous(breaks = c(-150, -110), limits = xlimits) +
   ylim(ylimits[1], ylimits[2]) +
   facet_wrap("year")
 

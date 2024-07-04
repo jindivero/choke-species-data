@@ -15,20 +15,23 @@ library(Metrics)
 theme_set(theme_bw(base_size = 25))
 theme_update(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
 
+#Set WD 
 basewd <-"/Users/jindiv/Library/CloudStorage/Dropbox/choke species/code/choke-species-data"
 setwd(basewd)
+
+#Function
 rsq <- function (x, y) cor(x, y) ^ 2
 
-#Combined in situ data
+## Pull in combined in situ data
 density_O2 <- readRDS("insitu_combined.rds")
 
-#Log O2
+#Log O2 and get DOY
 density_O2$O2_umolkg_ln <- log(density_O2$O2_umolkg)
 density_O2$depth_ln <- log(density_O2$depth)
 density_O2$sigma0_exp <- exp(density_O2$sigma0_kgm3)
 density_O2$doy <- as.POSIXlt(density_O2$date, format = "%Y-%b-%d")$yday
 
-#Remove alaska for now
+#Remove alaska for now, until we figure out what's going on with the units
 density_O2 <- subset(density_O2, survey!="afsc")
 
 #Subset to data with DO available and no DO
@@ -38,6 +41,9 @@ density_no_O2 <- density_O2 %>%
 density_O2 <- density_O2 %>% 
   filter(!is.na(do_mlpL), do_mlpL>0)
 
+#Remove NAs (was causing issues with smoother if had NAs)
+density_O2 <- density_O2 %>% drop_na(temperature_C, depth_ln, month, sigma0_exp)
+
 #Separate train and test data
 set.seed(7)
 density_O2$test <- rbinom(n = nrow(density_O2), size = 1, prob = 0.3)
@@ -45,9 +51,7 @@ train <- density_O2[density_O2$test == 0,]
 test <- density_O2[density_O2$test == 1,]
 
 train <- as.data.frame(train)
-
-#Remove NAs
-train <- train %>% drop_na(temperature_C, depth_ln, month, sigma0_exp)
+test <- as.data.frame(test)
 
 spde <- make_mesh(data = train, xy_cols = c("X","Y"), cutoff = 30)
 
@@ -103,6 +107,23 @@ m_6 <- sdmTMB(formula = O2_umolkg_ln  ~ 0 + s(sigma0_exp) + s(temperature_C) +  
               spatial = "on",
               spatiotemporal  = "IID")
 
+m_7 <- sdmTMB(formula = O2_umolkg_ln  ~ 0  + s(temperature_C) +  s(depth_ln) + s(doy),
+              mesh = spde,
+              data = train, 
+              family = gaussian(), 
+              time = "year",
+              spatial = "on",
+              spatiotemporal  = "IID")
+
+m_8 <- sdmTMB(formula = O2_umolkg_ln  ~ 0  +as.factor(survey)+s(sigma0_exp)+ s(temperature_C) +  s(depth_ln) + s(doy),
+              mesh = spde,
+              data = train, 
+              family = gaussian(), 
+              time = "year",
+              spatial = "on",
+              spatiotemporal  = "IID")
+
+
 #Taking forever
 # m_5 <- sdmTMB(formula = O2_umolkg_ln  ~ 0 + s(sigma0_exp) + s(temperature_C) +  s(depth_ln) + s(month, bs = "cc", k = 4),
 #               mesh = spde,
@@ -114,6 +135,8 @@ m_6 <- sdmTMB(formula = O2_umolkg_ln  ~ 0 + s(sigma0_exp) + s(temperature_C) +  
 
 #AIC
 AIC(m_1, m_2, m_3, m_4, m_5, m_6)
+AIC(m_6, m_7, m_8)
+
 #m_6 is best-fitting
 
 ##Refine doy smoother
@@ -138,7 +161,7 @@ test <- as.data.frame(test)
 
 #Predict onto test data
 
-O2_model <- m_6
+O2_model <- m_8
 
 test_predict_O2 <- predict(O2_model, newdata = test)
 train_predict_O2 <- predict(O2_model, newdata = train)
@@ -153,6 +176,29 @@ rmse(train_predict_O2$O2_umolkg_ln, train_predict_O2$est)/(max(train_predict_O2$
   geom_abline(slope = 1, intercept = 0, color = 1)+
   ylab("predicted O2")+
   geom_point(train_predict_O2, mapping=aes(x=O2_umolkg, y=exp(est)), colour="blue", size=0.8, alpha=0.7)
+  
+  test_predict_O2 %>% 
+    mutate(resid = scale(O2_umolkg_ln-est)) %>% 
+    ggplot(aes(x=O2_umolkg, y = -depth, color = resid))+
+    geom_jitter()+
+    scale_color_viridis_c()+
+    facet_wrap("survey")
+  
+  test_predict_O2 %>% 
+    mutate(resid = scale(O2_umolkg_ln-est)) %>% 
+    ggplot(aes(x=O2_umolkg, y = -depth, color = resid))+
+    geom_jitter()+
+    scale_color_viridis_c()+
+    facet_wrap("survey")
+  
+  
+  test_predict_O2 %>% 
+    mutate(resid = scale(O2_umolkg_ln-est)) %>% 
+    ggplot(aes(x=longitude, y = latitude, color = resid), size=0.2)+
+    geom_jitter()+
+    scale_color_viridis_c()+
+    facet_wrap("year")+
+    xlim(-180, -100)
   
   ggplot(test_predict_O2, aes(x = O2_umolkg, y = exp(est)))+
     geom_point(size=0.8, aes(colour=survey))+
@@ -396,3 +442,66 @@ ggplot(test_predict_O2, aes(x = o2, y = exp(est)))+
   ylab("predicted O2")+
   facet_wrap("year")+
   ylim(0,300)
+
+### Fit to all data except 1 year of NWFSC data ##
+#Combined in situ data
+density_O2 <- readRDS("insitu_combined.rds")
+
+#Log O2
+density_O2$O2_umolkg_ln <- log(density_O2$O2_umolkg)
+density_O2$depth_ln <- log(density_O2$depth)
+density_O2$sigma0_exp <- exp(density_O2$sigma0_kgm3)
+density_O2$doy <- as.POSIXlt(density_O2$date, format = "%Y-%b-%d")$yday
+
+#Remove alaska for now
+density_O2 <- subset(density_O2, survey!="afsc")
+
+#Data with oxygen
+density_O2 <- density_O2 %>% 
+  filter(!is.na(do_mlpL), do_mlpL>0)  
+
+#Remove rows with missing data
+density_O2 <- density_O2 %>% drop_na(temperature_C, depth_ln, month, sigma0_exp)
+
+train <- density_O2
+train$O2_umolkg_ln <- ifelse((train$survey=="nwfsc" & train$year==2011), NA, train$O2_umolkg_ln)
+train <- train %>% drop_na(O2_umolkg_ln)
+test <- filter(density_O2, year==2011 & survey=="nwfsc")
+
+train <- as.data.frame(train)
+test <- as.data.frame(test)
+spde <- make_mesh(data = train, xy_cols = c("X","Y"), cutoff = 30)
+
+#Fit model
+m_8 <- sdmTMB(formula = O2_umolkg_ln  ~ 0  +as.factor(survey)+s(sigma0_exp)+ s(temperature_C) +  s(depth_ln) + s(doy),
+              mesh = spde,
+              data = train, 
+              family = gaussian(), 
+              time = "year",
+              spatial = "on",
+              spatiotemporal  = "IID")
+
+#Predict
+O2_model <- m_8
+test_predict_O2 <- predict(O2_model, newdata = test)
+
+rsq(test_predict_O2$O2_umolkg_ln, test_predict_O2$est)
+rmse(test_predict_O2$O2_umolkg_ln, test_predict_O2$est)/(max(test_predict_O2$O2_umolkg_ln)- min(test_predict_O2$O2_umolkg_ln))
+
+#Compare
+ggplot(test_predict_O2, aes(x = O2_umolkg, y = exp(est), colour=survey))+
+  geom_point(size=0.8)+
+  geom_abline(slope = 1, intercept = 0, color = 1)+
+  ylab("predicted O2")
+
+test_predict_O2 %>% 
+  mutate(resid = scale(O2_umolkg_ln-est)) %>% 
+  ggplot(aes(x=O2_umolkg, y = -depth, color = resid))+
+  geom_jitter()+
+  scale_color_viridis_c()
+
+test_predict_O2 %>% 
+  mutate(resid = scale(O2_umolkg_ln-est)) %>% 
+  ggplot(aes(x=latitude, y = longitude, color = resid))+
+  geom_jitter()+
+  scale_color_viridis_c()
