@@ -1,0 +1,26 @@
+2008 OCNMS CTD casts were done with multiple units
+
+2008_Other.zip contents
+=======================
+
+Sea-Bird SBE19plus SN 4671, Oxygen SBE43 SN 1199, Pump SBE 5T SN 3968
+4671.con has Owens-Millard equation constants for SBE43 SN 1199
+
+09/05/2008  03:13 PM            64,097 CTD_TH100_090508.hex
+07/16/2008  09:41 AM            50,286 CTD_TH100_071608.hex
+08/18/2008  02:55 PM            37,300 CTD_RR042_081808.hex
+08/18/2008  10:23 AM            80,470 CTD_CE100_081808.hex
+07/15/2008  09:51 AM            56,558 CTD_CE100_071508.hex
+09/05/2008  08:37 AM            53,339 CTD_CA100_090508.hex
+07/14/2008  02:09 PM            56,642 CTD_CA100_071408.hex
+08/18/2008  03:27 PM            38,644 CTD_KL042_081808.hex
+
+
+Sea-Bird SBE19 SN 2997, Oxygen SBE43 SN 1315, Pump SBE 5T SN 2522
+2997.con has Sea-Bird equation constants for SBE43 SN 1315
+
+05/29/2008  01:03 PM            22,433 CTD_CA100_052908.hex
+06/12/2008  06:47 PM            21,655 CTD_RR065_061208.hex
+06/12/2008  06:15 PM            17,169 CTD_RR042_061208.hex
+06/12/2008  02:49 PM            31,353 CTD_CE100_061208.hex
+

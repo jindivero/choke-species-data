@@ -1,0 +1,1 @@
+The "SBE19_2997 con file.con" file is as-is on OCNMS' networked drive contained 2004 cast data.  NOTE:  It is dated February 11, 2005, NOT a 2004 date that preceeds the 2004 field season.

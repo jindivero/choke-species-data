@@ -1,0 +1,226 @@
+* Sea-Bird SBE19 Data File:
+* FileName = C:\Hypoxia Data\CA40_081505.hex
+* Software Version 1.1.6
+* Temperature SN = 2997
+* Conductivity SN = 2997
+* System UpLoad Time = Aug 15 2005 14:41:03
+* SEACAT PROFILER V3.1c SN 2997   08/15/05  14:40:17.321
+* strain gauge pressure sensor: S/N = 184829,  range = 3000 psia,  tc = 40
+* clk = 32767.984   iop = 164   vmain = 11.2   vlith = 5.1
+* mode = PROFILE  ncasts = 10
+* sample rate = 1 scan every 0.5 seconds
+* minimum raw conductivity frequency for pump turn on = 3202 hertz
+* pump delay = 40 seconds
+* samples = 8354   free = 78710   lwait = 0 msec
+* SW1 = C8   battery cutoff = 7.3 volts
+* number of voltages sampled = 4
+* logdata = NO
+
+* cast 2  08/15  12:43:53   samples 1305 to 2000 sample rate = 1 scan every 0.5 seconds  stop = switch of
+* S>
+
+# nquan = 9
+# nvalues = 40                          
+# units = specified
+# name 0 = timeJ: Julian Days
+# name 1 = prSM: Pressure, Strain Gauge [db]
+# name 2 = c0mS/cm: Conductivity [mS/cm]
+# name 3 = t090C: Temperature [ITS-90, deg C]
+# name 4 = oxML/L: Oxygen, Beckman/YSI [ml/l]
+# name 5 = depSM: Depth [salt water, m], lat = 47.5
+# name 6 = sal00: Salinity, Practical [PSU]
+# name 7 = sigma-é00: Density [sigma-theta, kg/m^3]
+# name 8 = flag: flag
+# span 0 = 227.532956, 227.533393       
+# span 1 =      4.000,     43.000       
+# span 2 =  34.582229,  36.062667       
+# span 3 =     7.7355,    10.7867       
+# span 4 =    3.15332,    4.86617       
+# span 5 =      3.967,     42.636       
+# span 6 =    32.2259,    33.4897       
+# span 7 =    24.6532,    26.1257       
+# span 8 = 0.0000e+00, 0.0000e+00       
+# interval = decibars: 1                
+# start_time = Aug 15 2005 12:43:53 [Instrument's time stamp, header]
+# bad_flag = -9.990e-29
+# <Sensors count="7" >
+#   <sensor Channel="1" >
+#     <!-- Frequency 0, Temperature -->
+#     <TemperatureSensor SensorID="55" >
+#       <SerialNumber>2997</SerialNumber>
+#       <CalibrationDate>15-Apr-05</CalibrationDate>
+#       <UseG_J>1</UseG_J>
+#       <A>0.00000000e+000</A>
+#       <B>0.00000000e+000</B>
+#       <C>0.00000000e+000</C>
+#       <D>0.00000000e+000</D>
+#       <F0_Old>0.000</F0_Old>
+#       <G>4.22196738e-003</G>
+#       <H>6.10116086e-004</H>
+#       <I>5.36664242e-006</I>
+#       <J>-1.69522935e-006</J>
+#       <F0>1000.000</F0>
+#       <Slope>1.00000000</Slope>
+#       <Offset>0.0000</Offset>
+#     </TemperatureSensor>
+#   </sensor>
+#   <sensor Channel="2" >
+#     <!-- Frequency 1, Conductivity -->
+#     <ConductivitySensor SensorID="3" >
+#       <SerialNumber>2997</SerialNumber>
+#       <CalibrationDate>15-Apr-05</CalibrationDate>
+#       <UseG_J>1</UseG_J>
+#       <!-- Cell const and series R are applicable only for wide range sensors. -->
+#       <SeriesR>0.0000</SeriesR>
+#       <CellConst>2000.0000</CellConst>
+#       <ConductivityType>0</ConductivityType>
+#       <Coefficients equation="0" >
+#         <A>0.00000000e+000</A>
+#         <B>0.00000000e+000</B>
+#         <C>0.00000000e+000</C>
+#         <D>0.00000000e+000</D>
+#         <M>0.0</M>
+#         <CPcor>0.00000000e+000</CPcor>
+#       </Coefficients>
+#       <Coefficients equation="1" >
+#         <G>-4.12988533e+000</G>
+#         <H>4.93709619e-001</H>
+#         <I>8.56914299e-004</I>
+#         <J>-1.44892253e-005</J>
+#         <CPcor>-9.57000000e-008</CPcor>
+#         <CTcor>3.2500e-006</CTcor>
+#         <!-- WBOTC not applicable unless ConductivityType = 1. -->
+#         <WBOTC>0.00000000e+000</WBOTC>
+#       </Coefficients>
+#       <Slope>1.00000000</Slope>
+#       <Offset>0.00000</Offset>
+#     </ConductivitySensor>
+#   </sensor>
+#   <sensor Channel="3" >
+#     <!-- A/D voltage 0, Oxygen Current, Beckman/YSI -->
+#     <OxygenSensor SensorID="36" >
+#       <SerialNumber>230903</SerialNumber>
+#       <CalibrationDate>27-Apr-05</CalibrationDate>
+#       <M>1.0009e-005</M>
+#       <B>-9.8085e-009</B>
+#       <Soc>0.0651</Soc>
+#       <Boc>-0.0163</Boc>
+#       <Tcor>-0.0330</Tcor>
+#       <Pcor>1.50e-004</Pcor>
+#       <Tau>2.0</Tau>
+#       <Wt>0.85</Wt>
+#     </OxygenSensor>
+#   </sensor>
+#   <sensor Channel="4" >
+#     <!-- A/D voltage 1, Oxygen Temperature, Beckman/YSI -->
+#     <OxygenSensor SensorID="39" >
+#       <SerialNumber></SerialNumber>
+#       <CalibrationDate></CalibrationDate>
+#       <K>6.5015</K>
+#       <C>-1.7160</C>
+#     </OxygenSensor>
+#   </sensor>
+#   <sensor Channel="5" >
+#     <!-- A/D voltage 2, Fluorometer, Seapoint -->
+#     <FluoroSeapointSensor SensorID="11" >
+#       <SerialNumber>2247</SerialNumber>
+#       <CalibrationDate>05-Jun-00</CalibrationDate>
+#       <!-- The following is an array index, not the actual gain setting. -->
+#       <GainSetting>0</GainSetting>
+#       <Offset>0.000</Offset>
+#     </FluoroSeapointSensor>
+#   </sensor>
+#   <sensor Channel="6" >
+#     <!-- A/D voltage 3, Transmissometer, Chelsea/Seatech -->
+#     <TransChelseaSeatechWetlabCStarSensor SensorID="59" >
+#       <SerialNumber>CST-315DR</SerialNumber>
+#       <CalibrationDate>29-April-2005</CalibrationDate>
+#       <M>19.6769</M>
+#       <B>-1.7119</B>
+#       <PathLength>0.250</PathLength>
+#     </TransChelseaSeatechWetlabCStarSensor>
+#   </sensor>
+#   <sensor Channel="7" >
+#     <!-- Pressure voltage, Pressure, Strain Gauge -->
+#     <PressureSensor SensorID="49" >
+#       <SerialNumber>184829</SerialNumber>
+#       <CalibrationDate>21-Apr-05</CalibrationDate>
+#       <A0>1.511226e+003</A0>
+#       <A1>-3.905821e-001</A1>
+#       <A2>1.329876e-007</A2>
+#       <Offset>0.00000</Offset>
+#     </PressureSensor>
+#   </sensor>
+# </Sensors>
+# datcnv_date = Jul 07 2023 16:13:46, 7.26.7.129 [datcnv_vars = 5]
+# datcnv_in = C:\Users\crisien\Documents\FRA Melanie\OCNMS_Project\Data\cruise_data\raw_data\non_mooring_site_ctds\2005_Other\CA40_081505.hex C:\Users\crisien\Documents\FRA Melanie\OCNMS_Project\Data\cruise_data\raw_data\non_mooring_site_ctds\2005_Other\2997_042005.con
+# datcnv_skipover = 0
+# datcnv_ox_tau_correction = yes
+# filter_date = Jul 07 2023 19:58:04, 7.26.7.129
+# filter_in = C:\Users\crisien\Documents\FRA Melanie\OCNMS_Project\Data\cruise_data\raw_data\non_mooring_site_ctds\2005_Other\CA40_081505.cnv
+# filter_low_pass_tc_A = 0.500
+# filter_low_pass_tc_B = 2.000
+# filter_low_pass_A_vars = c0mS/cm t090C
+# filter_low_pass_B_vars = prSM
+# alignctd_date = Jul 07 2023 20:14:01, 7.26.7.129
+# alignctd_in = C:\Users\crisien\Documents\FRA Melanie\OCNMS_Project\Data\cruise_data\raw_data\non_mooring_site_ctds\2005_Other\CA40_081505f.cnv
+# alignctd_adv = c0mS/cm -0.500, t090C 0.500, oxML/L 5.000                                                                                                                                                                           
+# loopedit_date = Jul 07 2023 20:22:03, 7.26.7.129
+# loopedit_in = C:\Users\crisien\Documents\FRA Melanie\OCNMS_Project\Data\cruise_data\raw_data\non_mooring_site_ctds\2005_Other\CA40_081505fa.cnv
+# loopedit_minVelocity = 0.250                                                                                            
+# loopedit_surfaceSoak: minDepth = 0.5, maxDepth = 2, useDeckPress = 1                                                    
+# loopedit_excl_bad_scans = yes
+# Derive_date = Jul 07 2023 20:31:06, 7.26.7.129 [derive_vars = 3]
+# Derive_in = C:\Users\crisien\Documents\FRA Melanie\OCNMS_Project\Data\cruise_data\raw_data\non_mooring_site_ctds\2005_Other\CA40_081505fae.cnv C:\Users\crisien\Documents\FRA Melanie\OCNMS_Project\Data\cruise_data\raw_data\non_mooring_site_ctds\2005_Other\2997_042005.con
+# binavg_date = Jul 07 2023 20:35:07, 7.26.7.129
+# binavg_in = C:\Users\crisien\Documents\FRA Melanie\OCNMS_Project\Data\cruise_data\raw_data\non_mooring_site_ctds\2005_Other\CA40_081505faed.cnv
+# binavg_bintype = decibars
+# binavg_binsize = 1
+# binavg_excl_bad_scans = yes
+# binavg_skipover = 0
+# binavg_omit = 0
+# binavg_min_scans_bin = 1
+# binavg_max_scans_bin = 2147483647
+# binavg_surface_bin = no, min = 0.000, max = 0.000, value = 0.000
+# file_type = ascii
+*END*
+ 227.532956      4.000  36.062667    10.7867    4.86617      3.967    32.2259    24.6532 0.0000e+00
+ 227.532973      5.000  35.852239    10.3762    4.46418      4.958    32.3788    24.8429 0.0000e+00
+ 227.532986      6.000  35.721279    10.0919    4.11586      5.950    32.5010    24.9859 0.0000e+00
+ 227.532998      7.000  35.571416     9.7001    3.84895      6.942    32.7027    25.2079 0.0000e+00
+ 227.533009      8.000  35.419955     9.3209    3.63980      7.933    32.8933    25.4182 0.0000e+00
+ 227.533019      9.000  35.305349     9.0425    3.49693      8.924    33.0316    25.5705 0.0000e+00
+ 227.533029     10.000  35.241209     8.8916    3.42911      9.917    33.1047    25.6513 0.0000e+00
+ 227.533039     11.000  35.177273     8.7248    3.38940     10.908    33.1935    25.7466 0.0000e+00
+ 227.533049     12.000  35.080421     8.5357    3.34239     11.899    33.2691    25.8348 0.0000e+00
+ 227.533059     13.000  34.990760     8.4106    3.30344     12.891    33.2921    25.8718 0.0000e+00
+ 227.533068     14.000  34.944066     8.3469    3.32398     13.883    33.3025    25.8896 0.0000e+00
+ 227.533078     15.000  34.904351     8.2717    3.36543     14.875    33.3312    25.9234 0.0000e+00
+ 227.533088     16.000  34.837727     8.1623    3.39136     15.866    33.3640    25.9653 0.0000e+00
+ 227.533099     17.000  34.767005     8.0857    3.40474     16.857    33.3611    25.9745 0.0000e+00
+ 227.533110     18.000  34.731532     8.0449    3.43643     17.849    33.3617    25.9809 0.0000e+00
+ 227.533122     19.000  34.702964     8.0084    3.44971     18.840    33.3655    25.9893 0.0000e+00
+ 227.533134     20.000  34.676827     7.9798    3.45245     19.832    33.3644    25.9926 0.0000e+00
+ 227.533145     21.000  34.659203     7.9638    3.45730     20.824    33.3603    25.9919 0.0000e+00
+ 227.533157     22.000  34.652747     7.9571    3.45298     21.815    33.3593    25.9921 0.0000e+00
+ 227.533168     23.000  34.651119     7.9541    3.41416     22.807    33.3600    25.9931 0.0000e+00
+ 227.533180     24.000  34.652814     7.9436    3.35225     23.798    33.3713    26.0034 0.0000e+00
+ 227.533192     25.000  34.657308     7.9298    3.28547     24.789    33.3889    26.0193 0.0000e+00
+ 227.533205     26.000  34.669417     7.9301    3.24621     25.782    33.4011    26.0288 0.0000e+00
+ 227.533218     27.000  34.675529     7.9309    3.24921     26.773    33.4065    26.0329 0.0000e+00
+ 227.533228     28.000  34.675476     7.9282    3.23905     27.764    33.4085    26.0349 0.0000e+00
+ 227.533240     29.000  34.675546     7.9180    3.21881     28.756    33.4178    26.0437 0.0000e+00
+ 227.533250     30.000  34.675647     7.9089    3.17052     29.747    33.4262    26.0517 0.0000e+00
+ 227.533260     31.000  34.680040     7.8999    3.15440     30.739    33.4390    26.0630 0.0000e+00
+ 227.533270     32.000  34.676192     7.8777    3.15332     31.730    33.4557    26.0794 0.0000e+00
+ 227.533281     33.000  34.661344     7.8460    3.17018     32.722    33.4696    26.0950 0.0000e+00
+ 227.533291     34.000  34.639464     7.8156    3.17414     33.713    33.4749    26.1035 0.0000e+00
+ 227.533301     35.000  34.628564     7.8041    3.17576     34.705    33.4738    26.1043 0.0000e+00
+ 227.533311     36.000  34.623956     7.7927    3.20269     35.696    33.4793    26.1103 0.0000e+00
+ 227.533321     37.000  34.614540     7.7717    3.23137     36.688    33.4889    26.1209 0.0000e+00
+ 227.533331     38.000  34.598075     7.7519    3.25199     37.679    33.4897    26.1244 0.0000e+00
+ 227.533341     39.000  34.588377     7.7409    3.25863     38.671    33.4893    26.1257 0.0000e+00
+ 227.533352     40.000  34.583564     7.7360    3.25936     39.662    33.4884    26.1257 0.0000e+00
+ 227.533363     41.000  34.582660     7.7355    3.26283     40.653    33.4875    26.1250 0.0000e+00
+ 227.533376     42.000  34.582751     7.7358    3.25867     41.645    33.4868    26.1245 0.0000e+00
+ 227.533393     43.000  34.582229     7.7372    3.24484     42.636    33.4845    26.1225 0.0000e+00
