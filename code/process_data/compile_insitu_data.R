@@ -5,6 +5,7 @@ library(ggpubr)
 library(seacarb)
 library(dplyr)
 library(sf)
+library(tidync)
 
 #Set ggplot themes 
 theme_set(theme_bw(base_size = 25))
@@ -81,7 +82,8 @@ nwfsc2 <- nwfsc2 %>%
 nwfsc2$survey <- "nwfsc"
 
 #IPHC data
-iphc <-  read_excel("~/Dropbox/choke species/code/choke-species-data/data/fish_raw/IPHC/IPHC_FISS_set_halibut.xlsx")
+#iphc <-  read_excel("~/Dropbox/choke species/code/choke-species-data/data/fish_raw/IPHC/IPHC_FISS_set_halibut.xlsx")
+iphc <-  read_excel("~/Dropbox/choke species/code/choke-species-data/data/fish_raw/IPHC/Set and Pacific halibut data.xlsx")
 colnames(iphc) <- tolower(colnames(iphc))
 
 #Columns of interest
@@ -89,7 +91,11 @@ iphc <- iphc[,c("year", "date", "beginlat", "beginlon", "begindepth (fm)", "temp
 colnames(iphc) <- c("year", "date", "latitude", "longitude", "depth", "temperature_C", "salinity_psu", "do_mlpL")
 
 #Date and month in right format
-iphc$month <- month(iphc$date)
+iphc$month <- month(ymd(iphc$date))
+iphc$day <- day(ymd(iphc$date))
+iphc$date <-  as.POSIXct(as.Date(with(iphc,paste(year,month,day,sep="-")),"%Y-%m-%d"))
+iphc$year <- as.numeric(iphc$year)
+iphc$day <- NULL
 
 #convert oxygen mg/L to umol_kg
 SA = gsw_SA_from_SP(iphc$salinity_psu,iphc$depth,iphc$longitude,iphc$latitude) #absolute salinity for pot T calc
@@ -100,7 +106,6 @@ iphc$O2_umolkg = iphc$do_mlpL*44660/(iphc$sigma0_kgm3+1000)
 
 #Convert coordinates
 #Remove with missing coordinates
-iphc <- subset(iphc, !is.na(latitude))
 iphc <- iphc %>%
   st_as_sf(coords=c('longitude','latitude'),crs=4326,remove = F) %>%  
   st_transform(crs = "+proj=utm +zone=10 +datum=WGS84 +units=km") %>% 
@@ -173,6 +178,9 @@ goa <- goa %>%
 
 #Add survey column
 goa$survey <- "afsc"
+
+##New years of Bering Sea data--this doesn't actually seem to have oxygen
+
 
 #Bind all together
 afsc <- as.data.frame(afsc)

@@ -374,7 +374,50 @@ wcoa$survey <- "wcoa"
 wcoa$doy <- as.POSIXlt(wcoa$date, format = "%Y-%b-%d")$yday
 
 #save
-saveRDS(wcoa, "wcoa_processed.rds")
+saveRDS(wcoa, "data/processed_data/wcoa_processed.rds")
+
+#CODAP https://www.ncei.noaa.gov/access/metadata/landing-page/bin/iso?id=gov.noaa.nodc:0219960
+codap <- read.csv("data/oxygen options/CODAP_NA_v2021.csv")
+colnames(codap) <- tolower(colnames(codap))
+
+bottle <- subset(codap, (oxygen_flag==2 & salinity_flag==2))
+ctd <- subset(codap, (ctdoxy_flag==2 & ctdsal_flag==2))
+
+bottle <- bottle[,c("year_utc", "month_utc", "day_utc", "latitude", "longitude", "depth", "oxygen", "salinity_pss78", "ctdtemp_its90")]
+ctd <- ctd[,c("year_utc", "month_utc", "day_utc", "latitude", "longitude", "depth", "ctdtemp_its90", "ctdsal_pss78", "ctdoxy")]
+
+bottle[] <- sapply(bottle, as.numeric)
+ctd[] <- sapply(ctd, as.numeric)
+
+colnames(bottle) <- c('year', 'month', "day", "latitude", "longitude", "depth", "O2_umolkg", "salinity_psu", "temperature_C")
+colnames(ctd) <- c('year', 'month', "day", "latitude", "longitude", "depth", "temperature_C", "salinity_psu", "O2_umolkg")
+
+codap <- bind_rows(bottle, ctd)
+  
+#Coordinates
+codap <- codap %>%
+  st_as_sf(coords=c('longitude','latitude'),crs=4326,remove = F) %>%  
+  st_transform(crs = "+proj=utm +zone=10 +datum=WGS84 +units=km") %>% 
+  mutate(X=st_coordinates(.)[,1],Y=st_coordinates(.)[,2]) 
+
+#sigma and convert O2
+SA = gsw_SA_from_SP(codap$salinity_psu,codap$depth,codap$longitude,codap$latitude) #absolute salinity for pot T calc
+pt = gsw_pt_from_t(SA,codap$temperature_C,codap$depth) #potential temp at a particular depth
+CT = gsw_CT_from_t(SA,codap$temperature_C,codap$depth) #conservative temp
+codap$sigma0_kgm3 = gsw_sigma0(SA,CT)
+
+#date
+codap$date <- as.POSIXct(as.Date(with(codap,paste(year,month,day,sep="-")),"%Y-%m-%d"))
+codap$day <-NULL
+
+#day of year
+codap$doy <- as.POSIXlt(codap$date, format = "%Y-%b-%d")$yday
+
+#West Coast only
+codap <- subset(codap, latitude>30 & latitude<69)
+codap <- subset(codap, longitude> -179 & longitude < -110)
+
+saveRDS(codap, "codap_processed.rds")
 
 #####OCNMS#####: https://zenodo.org/records/10466124 and https://zenodo.org/records/11167853
 

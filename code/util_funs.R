@@ -1276,7 +1276,7 @@ dat5 <- try(load_data_afsc(sci_name = sci_name, spc=spc, dat.by.size = dat.by.si
 gc()
 
 if(spc=="pacific halibut"){
-  catch <-  read_excel("~/Dropbox/choke species/code/choke-species-data/data/fish_raw/IPHC/IPHC_FISS_set_halibut.xlsx")
+  catch <-  read_excel("~/Dropbox/choke species/code/choke-species-data/data/fish_raw/IPHC/Set and Pacific halibut data.xlsx")
   adjustment <- read_excel("~/Dropbox/choke species/code/choke-species-data/data/fish_raw/IPHC/iphc-2023-fiss-hadj-20231031.xlsx")
   dat_IPHC <- IPHC(catch, adjustment)
 }
@@ -1315,6 +1315,10 @@ if(!exists("dat3") & exists("dat2")& exists("dat5")){
 if(spc=="pacific halibut"){
   dat_IPHC$event_id <- as.character(dat_IPHC$event_id)
   dat_IPHC$year <- as.character(dat_IPHC$year)
+  iphc$day <- day(ymd(iphc$date))
+  iphc$date <-  as.POSIXct(as.Date(with(iphc,paste(year,month,day,sep="-")),"%Y-%m-%d"))
+  iphc$year <- as.numeric(iphc$year)
+  iphc$day <- NULL
   dat4 <- bind_rows(dat4, dat_IPHC)
 }
 
