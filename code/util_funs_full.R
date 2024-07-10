@@ -1,7 +1,7 @@
 library(dplyr)
-install.packages("taxize")
+#install.packages("taxize")
 library(taxize)
-install.packages("rfishbase")
+#install.packages("rfishbase")
 library(rfishbase)
 library(readxl)
 #Get scientific name from itis number
@@ -1098,4 +1098,17 @@ IPHC <- function (catch, adjustment) {
   
   data <- left_join(catch, adjustment, by="stlkey")
   return(data)
+}
+#Function
+rsq <- function (x, y) cor(x, y) ^ 2
+#Subset to data with DO available and no DO
+subset_DO <- function (dat) {
+  
+  density_no_O2 <- dat %>% 
+    filter(is.na(do_mlpL)| do_mlpL<=0)
+  
+  density_O2 <- dat %>% 
+    filter(!is.na(do_mlpL), do_mlpL>0)
+  density_O2 <- density_O2 %>% drop_na(temperature_C, depth_ln, month, sigma0_exp)
+  return(list(density_no_O2 = density_no_O2, density_O2 = density_O2))
 }
