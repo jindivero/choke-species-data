@@ -3,6 +3,7 @@ library(tidyr)
 library(ncdf4)
 library(lubridate)
 library(sf)
+library(seacarb)
 
 basewd <-"/Users/jindiv/Library/CloudStorage/Dropbox/choke species/code/choke-species-data"
 setwd(basewd)
@@ -44,6 +45,19 @@ dat <- subset(dat, o_qual!=9|o_qual!=8)
 dat$survey <- "calCOFI_bottle"
 dat$type <- "bottle"
 
+#Date in correct format
+dat$day <- str_sub(dat$date, 4,5)
+dat$date <-  as.POSIXct(as.Date(with(dat,paste(year,month,day,sep="-")),"%Y-%m-%d"))
+dat$day <- NULL
+
+#Remove missing oxygen
+dat <- subset(dat, !is.na(O2_umolkg))
+
+#Filter by deepest depth
+dat <- dat %>% group_by(longitude, latitude, date) %>%
+  filter(depth == max(depth)) %>%
+  ungroup() 
+
 saveRDS(dat, "data/processed_data/calCOFI_processed.rds")
 
 ###Process P Line data: https://www.ncei.noaa.gov/data/oceans/ncei/ocads/metadata/0234342.html
@@ -84,6 +98,15 @@ dat1$sigma0_kgm3 = gsw_sigma0(SA,CT)
 #Add name of survey
 dat1$survey <- "LineP"
 dat1$type <- "bottle"
+
+#Remove missing oxygen
+dat1 <- subset(dat1, !is.na(O2_umolkg))
+
+#Filter by deepest depth
+dat1 <- dat1 %>% group_by(longitude, latitude, date) %>%
+  filter(depth == max(depth)) %>%
+  ungroup() 
+
 
 #Save
 saveRDS(dat1, "data/processed_data/LineP_processed.rds")
@@ -133,7 +156,7 @@ saveRDS(newport_data, "data/processed_data/newportline_processed.rds")
 all_files <- dir("data/oxygen options/WCOA")
 setwd("data/oxygen options/WCOA")
 df.list <- lapply(all_files, read_excel)
-wcoa <- rbindlist(df.list, fill=T)
+wcoa <- data.table::rbindlist(df.list, fill=T)
 #set WD back to normal
 setwd(basewd)
 
@@ -376,6 +399,15 @@ wcoa$survey <- "wcoa"
 #DOY
 wcoa$doy <- as.POSIXlt(wcoa$date, format = "%Y-%b-%d")$yday
 
+#Remove missing O2 data
+
+wcoa <- subset(wcoa, !is.na(O2_umolkg))
+
+#Deepest depth
+wcoa<- wcoa %>% group_by(longitude, latitude, date, type) %>%
+  filter(depth == max(depth)) %>%
+  ungroup() 
+
 #save
 saveRDS(wcoa, "data/processed_data/wcoa_processed.rds")
 
@@ -395,6 +427,8 @@ ctd[] <- sapply(ctd, as.numeric)
 colnames(bottle) <- c('year', 'month', "day", "latitude", "longitude", "depth", "O2_umolkg", "salinity_psu", "temperature_C")
 colnames(ctd) <- c('year', 'month', "day", "latitude", "longitude", "depth", "temperature_C", "salinity_psu", "O2_umolkg")
 
+bottle$type <- "bottle"
+ctd$type <- "ctd"
 codap <- bind_rows(bottle, ctd)
   
 #Coordinates
@@ -419,6 +453,14 @@ codap$doy <- as.POSIXlt(codap$date, format = "%Y-%b-%d")$yday
 #West Coast only
 codap <- subset(codap, latitude>30 & latitude<69)
 codap <- subset(codap, longitude> -179 & longitude < -110)
+
+#Remove missing oxygen
+codap <- subset(codap, !is.na(O2_umolkg))
+
+#Deepest depth
+codap <- codap %>% group_by(longitude, latitude, date, type) %>%
+  filter(depth == max(depth)) %>%
+  ungroup() 
 
 saveRDS(codap, "codap_processed.rds")
 
@@ -451,6 +493,11 @@ coords$do_mlpL <- ncvar_get(nc_ds, "dissolved_oxygen", collapse_degen=FALSE)
 coords$temperature_C <- ncvar_get(nc_ds, "dissolved_oxygen", collapse_degen=FALSE)
 coords$depth <- ncvar_get(nc_ds, "depth", collapse_degen=FALSE)
 coords$salinity_psu <- ncvar_get(nc_ds, "salinity", collapse_degen=FALSE)
+
+#Deepest depth
+coords <- coords %>% group_by(longitude, latitude, date) %>%
+  filter(depth == max(depth)) %>%
+  ungroup() 
 
 ocnms[[i]] <- list(coords)
 }
@@ -516,6 +563,10 @@ for (i in 1:length(all_files)){
   coords$depth <- ncvar_get(nc_ds, "depth", collapse_degen=FALSE)
   coords$salinity_psu <- ncvar_get(nc_ds, "salinity", collapse_degen=FALSE)
   
+  #Deepest depth
+  coords <- coords %>% group_by(longitude, latitude, date) %>%
+    filter(depth == max(depth)) %>%
+    ungroup() 
   ocnms[[i]] <- list(coords)
 }
 
