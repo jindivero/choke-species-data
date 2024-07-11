@@ -420,4 +420,36 @@ codap <- subset(codap, longitude> -179 & longitude < -110)
 saveRDS(codap, "codap_processed.rds")
 
 #####OCNMS#####: https://zenodo.org/records/10466124 and https://zenodo.org/records/11167853
+#oxygen in ml per L, temperature C, salinity psu, depth m
+setwd("data/oxygen options/ocnms/OCNMS1/netcdf_files/binned_profiles")
+folders <- list.files("data/oxygen options/ocnms/OCNMS1/netcdf_files/binned_profiles")
 
+ocnms <- list()
+for (i in 1:length(all_files)){
+file <- all_files[i]
+nc_ds <-  ncdf4::nc_open(file)
+nc_open(file)
+names(nc_ds$dim) #display dimensions
+names(nc_ds$var) #display variables
+
+dim_lat<- ncvar_get(nc_ds, "latitude", collapse_degen=FALSE)
+dim_lon<- ncvar_get(nc_ds, "longitude", collapse_degen=FALSE)
+dim_time <- ncvar_get(nc_ds, "time", collapse_degen=FALSE)
+dim_depth <- ncvar_get(nc_ds, "pressure", collapse_degen=FALSE)
+
+#time is seconds 
+coords <- as.data.frame(as.matrix(expand.grid(dim_lon, dim_lat, dim_depth, dim_time)))
+colnames(coords) <- c("longitude", "latitude", "pressure", "date")
+coords$date <- as.POSIXct("1970-01-01")+dseconds(dim_time)
+coords$date <- as.POSIXct(as.Date(coords$date, format = "%Y-%b-%d"))
+
+#variables dissolved_oxygen, salinity, temperature, and depth
+coords$do_mlpL <- ncvar_get(nc_ds, "dissolved_oxygen", collapse_degen=FALSE)
+coords$temperature_C <- ncvar_get(nc_ds, "dissolved_oxygen", collapse_degen=FALSE)
+coords$depth <- ncvar_get(nc_ds, "depth", collapse_degen=FALSE)
+coords$salinity_psu <- ncvar_get(nc_ds, "salinity", collapse_degen=FALSE)
+
+ocnms[[i]] <- list(coords)
+}
+
+test <- bind_rows(ocnms)
