@@ -1,5 +1,8 @@
 library(dplyr)
 library(tidyr)
+library(ncdf4)
+library(lubridate)
+library(sf)
 
 basewd <-"/Users/jindiv/Library/CloudStorage/Dropbox/choke species/code/choke-species-data"
 setwd(basewd)
@@ -422,7 +425,7 @@ saveRDS(codap, "codap_processed.rds")
 #####OCNMS#####: https://zenodo.org/records/10466124 and https://zenodo.org/records/11167853
 #oxygen in ml per L, temperature C, salinity psu, depth m
 setwd("data/oxygen options/ocnms/OCNMS1/netcdf_files/binned_profiles")
-folders <- list.files("data/oxygen options/ocnms/OCNMS1/netcdf_files/binned_profiles")
+all_files <- list.files(pattern=".nc", recursive=T)
 
 ocnms <- list()
 for (i in 1:length(all_files)){
@@ -452,4 +455,97 @@ coords$salinity_psu <- ncvar_get(nc_ds, "salinity", collapse_degen=FALSE)
 ocnms[[i]] <- list(coords)
 }
 
-test <- bind_rows(ocnms)
+ocnms <- as.data.frame(bind_rows(ocnms))
+
+#  get lat and long in UTC coordinates
+ocnms <- ocnms %>%
+  st_as_sf(coords=c('longitude','latitude'),crs=4326,remove = F) %>%  
+  st_transform(crs = "+proj=utm +zone=10 +datum=WGS84 +units=km") %>% 
+  mutate(X=st_coordinates(.)[,1],Y=st_coordinates(.)[,2]) 
+
+#sigma and convert O2
+SA = gsw_SA_from_SP(ocnms$salinity_psu,ocnms$depth,ocnms$longitude,ocnms$latitude) #absolute salinity for pot T calc
+pt = gsw_pt_from_t(SA,ocnms$temperature_C,ocnms$depth) #potential temp at a particular depth
+CT = gsw_CT_from_t(SA,ocnms$temperature_C,ocnms$depth) #conservative temp
+ocnms$sigma0_kgm3 = gsw_sigma0(SA,CT)
+dat$O2_umolkg = dat$do_mlpL*44660/(dat$sigma0_kgm3+1000) 
+
+#Survey
+ocnms$survey <- "ocnms"
+
+#Type
+ocnms$type <- "ctd"
+
+#DOY
+ocnms$doy <- as.POSIXlt(ocnms$date, format = "%Y-%b-%d")$yday
+
+#month
+ocnms$month <- month(ocnms$date)
+ocnms$year <- year(ocnms$date)
+
+setwd(basewd)
+save(ocnms, file="data/processed_data/ocnms_processed.rds")
+
+##The other OCNMS data
+setwd(basewd)
+setwd("data/oxygen options/ocnms/OCNMS2/netcdf_files/binned_profiles")
+all_files <- list.files(pattern=".nc", recursive=T)
+
+ocnms <- list()
+for (i in 1:length(all_files)){
+  file <- all_files[i]
+  nc_ds <-  ncdf4::nc_open(file)
+  nc_open(file)
+  names(nc_ds$dim) #display dimensions
+  names(nc_ds$var) #display variables
+  
+  dim_lat<- ncvar_get(nc_ds, "latitude", collapse_degen=FALSE)
+  dim_lon<- ncvar_get(nc_ds, "longitude", collapse_degen=FALSE)
+  dim_time <- ncvar_get(nc_ds, "time", collapse_degen=FALSE)
+  dim_depth <- ncvar_get(nc_ds, "pressure", collapse_degen=FALSE)
+  
+  #time is seconds 
+  coords <- as.data.frame(as.matrix(expand.grid(dim_lon, dim_lat, dim_depth, dim_time)))
+  colnames(coords) <- c("longitude", "latitude", "pressure", "date")
+  coords$date <- as.POSIXct("1970-01-01")+dseconds(dim_time)
+  coords$date <- as.POSIXct(as.Date(coords$date, format = "%Y-%b-%d"))
+  
+  #variables dissolved_oxygen, salinity, temperature, and depth
+  coords$do_mlpL <- ncvar_get(nc_ds, "dissolved_oxygen", collapse_degen=FALSE)
+  coords$temperature_C <- ncvar_get(nc_ds, "dissolved_oxygen", collapse_degen=FALSE)
+  coords$depth <- ncvar_get(nc_ds, "depth", collapse_degen=FALSE)
+  coords$salinity_psu <- ncvar_get(nc_ds, "salinity", collapse_degen=FALSE)
+  
+  ocnms[[i]] <- list(coords)
+}
+
+ocnms <- as.data.frame(bind_rows(ocnms))
+
+#  get lat and long in UTC coordinates
+ocnms <- ocnms %>%
+  st_as_sf(coords=c('longitude','latitude'),crs=4326,remove = F) %>%  
+  st_transform(crs = "+proj=utm +zone=10 +datum=WGS84 +units=km") %>% 
+  mutate(X=st_coordinates(.)[,1],Y=st_coordinates(.)[,2]) 
+
+#sigma and convert O2
+SA = gsw_SA_from_SP(ocnms$salinity_psu,ocnms$depth,ocnms$longitude,ocnms$latitude) #absolute salinity for pot T calc
+pt = gsw_pt_from_t(SA,ocnms$temperature_C,ocnms$depth) #potential temp at a particular depth
+CT = gsw_CT_from_t(SA,ocnms$temperature_C,ocnms$depth) #conservative temp
+ocnms$sigma0_kgm3 = gsw_sigma0(SA,CT)
+ocnms$O2_umolkg = ocnms$do_mlpL*44660/(ocnms$sigma0_kgm3+1000) 
+
+#Survey
+ocnms$survey <- "ocnms"
+
+#Type
+ocnms$type <- "ctd"
+
+#DOY
+ocnms$doy <- as.POSIXlt(ocnms$date, format = "%Y-%b-%d")$yday
+
+#month
+ocnms$month <- month(ocnms$date)
+ocnms$year <- year(ocnms$date)
+
+setwd(basewd)
+save(ocnms, file="data/processed_data/ocnms2_processed.rds")
