@@ -42,7 +42,7 @@ dat <- dat %>%
 dat <- subset(dat, o_qual!=9|o_qual!=8)
 
 #Add name of survey
-dat$survey <- "calCOFI_bottle"
+dat$survey <- "calCOFI"
 dat$type <- "bottle"
 
 #Date in correct format
@@ -57,6 +57,8 @@ dat <- subset(dat, !is.na(O2_umolkg))
 dat <- dat %>% group_by(longitude, latitude, date) %>%
   filter(depth == max(depth)) %>%
   ungroup() 
+
+dat$o_qual <- NULL
 
 saveRDS(dat, "data/processed_data/calCOFI_processed.rds")
 
@@ -462,7 +464,9 @@ codap <- codap %>% group_by(longitude, latitude, date, type) %>%
   filter(depth == max(depth)) %>%
   ungroup() 
 
-saveRDS(codap, "codap_processed.rds")
+codap$survey <- "codap"
+
+saveRDS(codap, "data/processed_data/codap_processed.rds")
 
 #####OCNMS#####: https://zenodo.org/records/10466124 and https://zenodo.org/records/11167853
 #oxygen in ml per L, temperature C, salinity psu, depth m
@@ -515,7 +519,7 @@ SA = gsw_SA_from_SP(ocnms$salinity_psu,ocnms$depth,ocnms$longitude,ocnms$latitud
 pt = gsw_pt_from_t(SA,ocnms$temperature_C,ocnms$depth) #potential temp at a particular depth
 CT = gsw_CT_from_t(SA,ocnms$temperature_C,ocnms$depth) #conservative temp
 ocnms$sigma0_kgm3 = gsw_sigma0(SA,CT)
-dat$O2_umolkg = dat$do_mlpL*44660/(dat$sigma0_kgm3+1000) 
+ocnms$O2_umolkg = ocnms$do_mlpL*44660/(ocnms$sigma0_kgm3+1000) 
 
 #Survey
 ocnms$survey <- "ocnms"
@@ -531,7 +535,7 @@ ocnms$month <- month(ocnms$date)
 ocnms$year <- year(ocnms$date)
 
 setwd(basewd)
-save(ocnms, file="data/processed_data/ocnms_processed.rds")
+saveRDS(ocnms, file="data/processed_data/ocnms_processed.rds")
 
 ##The other OCNMS data
 setwd(basewd)
@@ -599,4 +603,4 @@ ocnms$month <- month(ocnms$date)
 ocnms$year <- year(ocnms$date)
 
 setwd(basewd)
-save(ocnms, file="data/processed_data/ocnms2_processed.rds")
+saveRDS(ocnms, file="data/processed_data/ocnms2_processed.rds")

@@ -1,13 +1,12 @@
 #Prepare data
 setwd("/Users/jindiv/Library/CloudStorage/Dropbox/choke species/code/choke-species-data")
-source("/Users/jindiv/Library/CloudStorage/Dropbox/choke species/code/choke-species-data/code/wa_state/util_funs.R")
+source("code/util_funs.R")
 library(stringr)
 library(ggplot2)
 
 setwd("/Users/jindiv/Library/CloudStorage/Dropbox/choke species/code/choke-species-data")
 
 ### Set ggplot themes ###
-theme_set(theme_bw(base_size = 25))
 theme_update(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
 
 ##Pull species of interest
@@ -15,10 +14,16 @@ theme_update(panel.grid.major = element_blank(), panel.grid.minor = element_blan
 sci_name <- "anoplopoma fimbria" 
 spc <- "sablefish" 
 
-dat <- prepare_data(spc=spc, sci_name=sci_name, ROMS=F)
+dat_sablefish <- prepare_data(spc=spc, sci_name=sci_name, ROMS=F, GLORYS=F)
 
-#How many positive catches vs zero catches, and how many hauls with missing length data?
-positive_catches <- positive_catches(dat)
+dat_pcod <- prepare_data(spc="pacific cod", sci_name="gadus macrocephalus", ROMS=F, GLORYS=F)
+dat_arrowtooth <- prepare_data(spc="arrowtooth flounder", sci_name="atheresthes stomias", ROMS=F, GLORYS=F)
+dat_halibut <- prepare_data(spc="pacific halibut", sci_name="hippoglossus stenolepis", ROMS=F, GLORYS=F)
+
+saveRDS(dat_pcod, "data/processed_data/dat_pcod.rds")
+saveRDS(dat_arrowtooth, "data/processed_data/dat_aflounder.rds")
+saveRDS(dat_halibut, "data/processed_data/dat_phalibut.rds")
+saveRDS(dat_sablefish, "data/processed_data/dat_sablefish.rds")
 
 ##Multiple species
 #Print options
@@ -33,7 +38,7 @@ spcs <- c("walleye pollock", "sablefish", "dover sole", "petrale sole", "pacific
 dataframes <- list()
 for(i in 1:length(sci_names)){
   message( "Preparing ", spcs[i], Sys.time() )
-  dat <- prepare_data(spcs[i], sci_names[i], ROMS=F)
+  dat <- prepare_data(spcs[i], sci_names[i], ROMS=F, GLORYS=F)
   name <- paste(spcs[i])
   dataframes[[name]] <- dat
 }

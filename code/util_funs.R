@@ -6,7 +6,6 @@ install.packages("rfishbase")
 library(rfishbase)
 install.packages("gsw")
 library(gsw)
-library(dplyr)
 library(readxl)
 library(stringr)
 
@@ -346,8 +345,8 @@ length_expand_nwfsc <- function(spc, sci_name) {
 # Species of interest and max. juvenile lengths (define ontogenetic classes)
 length_expand_afsc <- function(sci_name) {
   # load, clean, and join data
-  bio2 <-readRDS("data/fish_raw/NOAA/ak_bts_goa_ebs_nbs_all_levels.RDS")
-  catch2 <- readRDS("data/fish_raw/NOAA/ak_bts_goa_ebs_nbs_cpue_zerofilled.RDS")
+  bio2 <-readRDS("data/fish_raw/NOAA/ak_bts_goa_ebs_nbs_indivero_all_levels.RDS")
+  catch2 <- readRDS("data/fish_raw/NOAA/ak_bts_goa_ebs_nbs_indivero_cpue_zerofilled.RDS")
   
   #Isolate necessary parts of full data to get specimen weights/lengths per haul
   haul <- bio2$haul
@@ -620,8 +619,8 @@ if(nrow(dat_sub)==0){
 }
 
 load_data_afsc <- function(sci_name, spc, dat.by.size, length=T) {
-    dat <-readRDS("data/fish_raw/NOAA/ak_bts_goa_ebs_nbs_cpue_zerofilled.RDS")
-    bio2 <-readRDS("data/fish_raw/NOAA/ak_bts_goa_ebs_nbs_all_levels.RDS")
+    bio2 <-readRDS("data/fish_raw/NOAA/ak_bts_goa_ebs_nbs_indivero_all_levels.RDS")
+    dat <-readRDS("data/fish_raw/NOAA/ak_bts_goa_ebs_nbs_indivero_cpue_zerofilled.RDS")
     species <- bio2$species
     names(dat) = tolower(names(dat))
     names(species) =tolower(names(species))
@@ -1159,6 +1158,7 @@ IPHC <- function (catch, adjustment) {
   colnames(adjustment) <- tolower(colnames(adjustment))
   
   #join
+  adjustment$stlkey <- as.character(adjustment$stlkey)
   data <- left_join(catch, adjustment, by="stlkey")
   data$h.adj <- as.numeric(data$h.adj)
   
@@ -1250,7 +1250,7 @@ gsw_O2sol_SP_pt <- function(sal,pt) {
   return(O2sol)
 }
 
-prepare_data <- function(spc,sci_name, ROMS){
+prepare_data <- function(spc,sci_name, ROMS, GLORYS){
 dat.by.size <- try(length_expand_bc(sci_name))
 gc()
 if(is.data.frame(dat.by.size)){
@@ -1313,12 +1313,6 @@ if(!exists("dat3") & exists("dat2")& exists("dat5")){
 }
 
 if(spc=="pacific halibut"){
-  dat_IPHC$event_id <- as.character(dat_IPHC$event_id)
-  dat_IPHC$year <- as.character(dat_IPHC$year)
-  iphc$day <- day(ymd(iphc$date))
-  iphc$date <-  as.POSIXct(as.Date(with(iphc,paste(year,month,day,sep="-")),"%Y-%m-%d"))
-  iphc$year <- as.numeric(iphc$year)
-  iphc$day <- NULL
   dat4 <- bind_rows(dat4, dat_IPHC)
 }
 
@@ -1349,6 +1343,7 @@ dat$sal_ROMS <- ifelse(dat$sal_ROMS>=0, dat$sal_ROMS, NA)
 }
 
 ###Add glorys data
+if(GLORYS==T){
 glorys <- readRDS("/Users/jindiv/Library/CloudStorage/Dropbox/choke species/code/choke-species-data/data/glorys_combined.rds")
 #Isolate just variables of interest
 glorys <- glorys[,c("o2_glorys", "temp_glorys", "sal_glorys", "date_haul", "event_id", "stlkey", "depth_gloryso2")]
@@ -1405,9 +1400,14 @@ dat$X <- dat$long
 dat$Y <- dat$lat
 dat$cpue_kg_km2_sub <- dat$cpue_kg_km2 * (dat$p2+dat$p3)
 dat$cpue_kg_km2_sub <- ifelse(dat$cpue_kg_km2==0, 0, dat$cpue_kg_km2_sub)
+}
 
 #Make broader region for BC
-dat$region<- ifelse(str_detect(dat$project, "SYN"), "BC", dat$project)
+if(GLORYS==F & ROMS==F){
+  dat <- dat4
+}
+
+dat$region<- ifelse(str_detect(dat$project, "SYN"), "dfo", dat$project)
 try(return(dat))
 }
 
