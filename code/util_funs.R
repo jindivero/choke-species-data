@@ -8,6 +8,8 @@ install.packages("gsw")
 library(gsw)
 library(readxl)
 library(stringr)
+library(lubridate)
+library(sf)
 
 #Convert a scaled variable back to its original
 back.convert <- function(x, mean_orig, sd_orig) (x* sd_orig+mean_orig)
@@ -128,11 +130,11 @@ load_data_nwfsc <- function(spc,sci_name, dat.by.size, length=T) {
   # dat <- dplyr::filter(dat, !is.na(temp), !is.na(mi))
   
   # prepare data and models -------------------------------------------------
-  dat$long <- dat$longitude_dd
-  dat$lat <- dat$latitude_dd
+  dat$longitude <- dat$longitude_dd
+  dat$latitude <- dat$latitude_dd
   dat$event_id <- dat$trawl_id
-  dat$year <- as.character(dat$year)
-  dat <- dplyr::select(dat, event_id, common_name, project, vessel, tow, year, longitude_dd, latitude_dd, long, lat, cpue_kg_km2,
+  dat$date <- as.POSIXct(as.Date(dat$date, format = "%Y-%b-%d"))
+  dat <- dplyr::select(dat, event_id, common_name, project, vessel, tow, year, date, longitude_dd, latitude_dd, longitude, latitude, cpue_kg_km2,
                        depth_m, julian_day, nlength, median_weight, haul_weight, pass, p1, p2, p3, p4)
   
   # UTM transformation
@@ -144,9 +146,11 @@ load_data_nwfsc <- function(spc,sci_name, dat.by.size, length=T) {
                         sp::CRS("+proj=utm +zone=10 +datum=WGS84 +units=km"))
   # convert back from sp object to data frame
   dat = as.data.frame(dat_utm)
-  dat = dplyr::rename(dat, longitude = coords.x1,
-                      latitude = coords.x2)
+  dat = dplyr::rename(dat, X = coords.x1,
+                      Y = coords.x2)
   dat$scientific_name <- sci_name
+  dat$depth <- dat$depth_m
+  dat$depth_m <- NULL
   return(dat)
 }
 
@@ -645,7 +649,6 @@ load_data_afsc <- function(sci_name, spc, dat.by.size, length=T) {
     dat <- left_join(dat, haul)
     for (i in 1:nrow(dat)) dat$julian_day[i] <- as.POSIXlt(dat$start_time[i], format = "%Y-%b-%d")$yday
     
-    
     #O2 from trawl data is in ml/l 
     # just in case, remove any missing or nonsense values from sensors
     # dat <- dplyr::filter(dat, !is.na(o2), !is.na(sal), !is.na(temp), is.finite(sal))
@@ -655,14 +658,14 @@ load_data_afsc <- function(sci_name, spc, dat.by.size, length=T) {
     # prepare data and models -------------------------------------------------
     dat$longitude_dd <- dat$longitude_dd_start
     dat$latitude_dd <- dat$latitude_dd_start
-    dat$long <- dat$longitude_dd
-    dat$lat <- dat$latitude_dd
+    dat$longitude <- dat$longitude_dd
+    dat$latitude <- dat$latitude_dd
     dat$scientific_name <- dat$species_name
     dat$cpue_kg_km2 <- dat$cpue_kgkm2
     dat$project <- dat$survey
     dat$event_id <- dat$trawl_id
-    dat$year <- as.character(dat$year)
-    dat <- dplyr::select(dat, event_id, common_name, scientific_name, project, year, bottom_temperature_c, longitude_dd, latitude_dd, long, lat, cpue_kg_km2,
+    dat$date <- as.POSIXct(as.Date(dat$start_time, format = "%Y-%b-%d"))
+    dat <- dplyr::select(dat, event_id, common_name, scientific_name, project, year, date, bottom_temperature_c, longitude_dd, latitude_dd, longitude, latitude, cpue_kg_km2,
                          depth_m, julian_day, nlength, median_weight, haul_weight, p1, p2, p3, p4)
     
     
@@ -675,8 +678,10 @@ load_data_afsc <- function(sci_name, spc, dat.by.size, length=T) {
                               sp::CRS("+proj=utm +zone=10 +datum=WGS84 +units=km"))
     # convert back from sp object to data frame
     dat = as.data.frame(dat_utm)
-    dat = dplyr::rename(dat, longitude = coords.x1,
-                        latitude = coords.x2)
+    dat = dplyr::rename(dat, X = coords.x1,
+                        Y = coords.x2)
+    dat$depth <- dat$depth_m
+    dat$depth_m <- NULL
     return(dat)
   }
 
@@ -941,13 +946,14 @@ load_data_bc <- function(sci_name,dat.by.size, length=T, spc) {
   dat$cpue_kg_km2 <- dat$catch_weight
   dat$longitude_dd <- dat$lon_start
   dat$latitude_dd <- dat$lat_start
-  dat$long <- dat$lon_start
-  dat$lat <- dat$lat_start
+  dat$longitude <- dat$lon_start
+  dat$latitude <- dat$lat_start
   dat$event_id <- as.character(dat$event_id)
-  
   dat$year <- substr(dat$date, start=1, stop=4)
+  dat$year <- as.integer(dat$year)
+  dat$date <- as.POSIXct(as.Date(dat$date, format = "%Y-%b-%d"))
   dat$project <- dat$survey_name
-  dat <- dplyr::select(dat, event_id, scientific_name, project, year, longitude_dd, latitude_dd, long, lat, cpue_kg_km2,
+  dat <- dplyr::select(dat, event_id, scientific_name, project, year, date, longitude_dd, latitude_dd, longitude, latitude, cpue_kg_km2,
                        depth_m, julian_day, nlength,median_weight, haul_weight, pass, p1, p2, p3, p4)
   dat <- filter(dat, !is.na(latitude_dd))
   
@@ -961,9 +967,11 @@ load_data_bc <- function(sci_name,dat.by.size, length=T, spc) {
                         sp::CRS("+proj=utm +zone=10 +datum=WGS84 +units=km"))
   # convert back from sp object to data frame
   dat = as.data.frame(dat_utm)
-  dat = dplyr::rename(dat, longitude = coords.x1,
-                      latitude = coords.x2)
+  dat = dplyr::rename(dat, X = coords.x1,
+                      Y = coords.x2)
   dat$common_name <- spc
+  dat$depth <- dat$depth_m
+  dat$depth_m <- NULL
   return(dat)
 }
 
@@ -1169,15 +1177,44 @@ IPHC <- function (catch, adjustment) {
   data$cpue_u32_weight <- data$cpue_u32_weight * data$h.adj
   
   #Extract columns of interest
-  dat <- data[,c("year.x", "stlkey", "date.x", "midlat", "midlon", "profiler bottom depth (m)", "temp c", "ph", "salinity psu", "oxygen_ml", "oxygen_umol", "oxygen_sat", "cpue_o32_count", "cpue_u32_count", "cpue_o32_weight", "cpue_u32_weight")]
+  dat <- data[,c("year.x", "date.x", "midlat", "midlon", "avgdepth (fm)", "temp c", "salinity psu", "oxygen_ml",  "cpue_o32_weight", "cpue_u32_weight")]
 
   #Re-name columns to match the NOAA and BC data
-  colnames(dat) <- c("year", "event_id", "date", "lat", "long", "depth_m", "temp_c", "ph", "sal_psu", "o2_ml", "o2_umol", "o2_sat", "cpue_o32_count", "cpue_u32_count", "cpue_o32_weight", "cpue_u32_weight")
+  colnames(dat) <- c("year", "date", "latitude", "longitude", "depth", "temperature_C", "salinity_psu", "do_mlpL", "cpue_o32_weight", "cpue_u32_weight")
   
   #Add columns to match the NOAA and BC data
-  dat$project <- "IPHC"
+  dat$project <- "iphc"
   dat$common_name <- "pacific halibut"
   dat$scientific_name <- "hippoglossus stenolepis"
+  
+  #Date and month in right format
+  dat$month <- case_when(grepl("May",dat$date) ~5,
+                         grepl("Jun",dat$date)  ~6,
+                         grepl("Jul",dat$date)  ~7,
+                         grepl("Aug",dat$date)  ~8,
+                         grepl("Sep",dat$date)  ~9,
+                         grepl("Oct",dat$date)  ~10)
+  dat$day <- as.numeric(substr(dat$date, 1,2))
+  dat$date <-  as.POSIXct(as.Date(with(dat,paste(year,month,day,sep="-")),"%Y-%m-%d"))
+  dat$doy <- as.POSIXlt(dat$date, format = "%Y-%b-%d")$yday
+  dat$year <- as.numeric(dat$year)
+  dat$day <- NULL
+  
+  
+  #convert oxygen mg/L to umol_kg
+  SA = gsw_SA_from_SP(dat$salinity_psu,dat$depth,dat$longitude,dat$latitude) #absolute salinity for pot T calc
+  pt = gsw_pt_from_t(SA,dat$temperature_C,dat$depth) #potential temp at a particular depth
+  CT = gsw_CT_from_t(SA,dat$temperature_C,dat$depth) #conservative temp
+  dat$sigma0_kgm3 = gsw_sigma0(SA,CT)
+  dat$O2_umolkg = dat$do_mlpL*44660/(dat$sigma0_kgm3+1000) 
+  
+  #Convert coordinates
+  dat <- subset(dat, !is.na(latitude))
+  dat <- dat %>%
+    st_as_sf(coords=c('longitude','latitude'),crs=4326,remove = F) %>%  
+    st_transform(crs = "+proj=utm +zone=10 +datum=WGS84 +units=km") %>% 
+    mutate(X=st_coordinates(.)[,1],Y=st_coordinates(.)[,2]) 
+  
   return(dat)
 }
    
@@ -1250,7 +1287,7 @@ gsw_O2sol_SP_pt <- function(sal,pt) {
   return(O2sol)
 }
 
-prepare_data <- function(spc,sci_name, ROMS, GLORYS){
+prepare_data <- function(spc,sci_name, ROMS, GLORYS, in_situ){
 dat.by.size <- try(length_expand_bc(sci_name))
 gc()
 if(is.data.frame(dat.by.size)){
@@ -1274,12 +1311,6 @@ dat5 <- try(load_data_afsc(sci_name = sci_name, spc=spc, dat.by.size = dat.by.si
 }
 
 gc()
-
-if(spc=="pacific halibut"){
-  catch <-  read_excel("~/Dropbox/choke species/code/choke-species-data/data/fish_raw/IPHC/Set and Pacific halibut data.xlsx")
-  adjustment <- read_excel("~/Dropbox/choke species/code/choke-species-data/data/fish_raw/IPHC/iphc-2023-fiss-hadj-20231031.xlsx")
-  dat_IPHC <- IPHC(catch, adjustment)
-}
 
 #All regions present
 if(exists("dat3") & exists("dat2") & exists("dat5")){
@@ -1312,7 +1343,10 @@ if(!exists("dat3") & exists("dat2")& exists("dat5")){
   dat4 <- bind_rows(dat2, dat5)
 }
 
-if(spc=="pacific halibut"){
+if(spc=="pacific halibut" & (ROMS==T| GLORYS==T)){
+  catch <-  read_excel("~/Dropbox/choke species/code/choke-species-data/data/fish_raw/IPHC/Set and Pacific halibut data.xlsx")
+  adjustment <- read_excel("~/Dropbox/choke species/code/choke-species-data/data/fish_raw/IPHC/iphc-2023-fiss-hadj-20231031.xlsx")
+  dat_IPHC <- IPHC(catch, adjustment)
   dat4 <- bind_rows(dat4, dat_IPHC)
 }
 
@@ -1396,8 +1430,6 @@ dat$log_depth_scaled <- scale(log(dat$depth_m))
 dat$log_depth_scaled2 <- with(dat, log_depth_scaled ^ 2)
 dat$jday_scaled <- scale(dat$julian_day)
 dat$jday_scaled2 <- with(dat, jday_scaled ^ 2)
-dat$X <- dat$long
-dat$Y <- dat$lat
 dat$cpue_kg_km2_sub <- dat$cpue_kg_km2 * (dat$p2+dat$p3)
 dat$cpue_kg_km2_sub <- ifelse(dat$cpue_kg_km2==0, 0, dat$cpue_kg_km2_sub)
 }
@@ -1407,7 +1439,92 @@ if(GLORYS==F & ROMS==F){
   dat <- dat4
 }
 
-dat$region<- ifelse(str_detect(dat$project, "SYN"), "dfo", dat$project)
+###Add in situ data####
+if(GLORYS==F & ROMS==F){
+insitu <- filter(insitu, survey!="iphc")
+dat <- left_join(dat, insitu, by=c("date", "latitude", "longitude"))
+#Edit columns
+dat$event_id.x <- dat$event_id
+dat$event_id.x <- NULL
+dat$event_id.y <- NULL
+dat$year <- dat$year.x
+dat$year.y <- NULL
+dat$year.x <- NULL
+dat$depth <- dat$depth.x
+dat$depth.x <- NULL
+dat$depth.y <- NULL
+dat$survey <- NULL
+dat$X <- dat$X.x
+dat$Y <- dat$Y.x
+dat$X.x <- NULL
+dat$X.y <- NULL
+dat$Y.x <- NULL
+dat$Y.y <- NULL
+
+#Add IPHC data
+if(spc=="pacific halibut"){
+  catch <-  read_excel("~/Dropbox/choke species/code/choke-species-data/data/fish_raw/IPHC/Set and Pacific halibut data.xlsx")
+  adjustment <- read_excel("~/Dropbox/choke species/code/choke-species-data/data/fish_raw/IPHC/iphc-2023-fiss-hadj-20231031.xlsx")
+  dat_IPHC <- IPHC(catch, adjustment)
+  dat <- bind_rows(dat, dat_IPHC)
+}
+
+
+#Some other columns
+dat$survey<- ifelse(str_detect(dat$project, "SYN"), "DFO_Pacific", dat$project)
+dat$cpue_kg_km2_sub <- dat$cpue_kg_km2 * (dat$p2+dat$p3)
+dat$cpue_kg_km2_sub <- ifelse(dat$cpue_kg_km2==0, 0, dat$cpue_kg_km2_sub)
+dat$log_depth_scaled <- scale(log(dat$depth))
+dat$log_depth_scaled2 <- with(dat, log_depth_scaled ^ 2)
+dat$doy <- dat$julian_day
+dat$julian_day <- NULL
+##Calculate metabolic index
+## Convert oxygen from glorys concentration (mmol/m^3) to kPa
+
+dat$po2 <- calc_po2_sat(salinity=dat$salinity_psu, temp=dat$temperature_C, depth=dat$depth, oxygen=dat$O2_umolkg, lat=dat$latitude, long=dat$longitude, umol_m3=T, ml_L=F)
+
+##Calculate inverse temp
+kelvin = 273.15
+boltz = 0.000086173324
+tref <- 12
+dat$invtemp <- (1 / boltz)  * ( 1 / (dat$temperature_C + 273.15) - 1 / (tref + 273.15))
+
+##Calculate Metabolic index 
+#Pull parameters ((pulled in code file 2a))
+MI_pars <- readRDS("metabolic_index-main/MI_pars.rds")
+Eo1 <-  MI_pars[1,3] #Median
+Eo2 <-  Eo1-(MI_pars[2,3]*1.28)    #low 90th percentile, close to zero
+Eo3 <-  Eo1+(MI_pars[2,3]*1.28)    #High 90th percentile, close to zero
+Ao <- 1/exp(MI_pars[1,1])
+n <- MI_pars[1,2]
+#Average weight across all hauls--in case want to make universal
+dat$mean_weight <- mean(dat$median_weight, na.rm=T)
+
+#Calculate metabolic index with each Eo
+dat$mi1 <- calc_mi(Eo1, Ao, dat$mean_weight,  n, dat$po2, dat$invtemp)
+dat$mi2 <- calc_mi(Eo2, Ao, dat$mean_weight, n, dat$po2, dat$invtemp)
+dat$mi3 <- calc_mi(Eo3, Ao, dat$mean_weight, n, dat$po2, dat$invtemp)
+
+#For average body size from each haul
+dat$mi5 <- calc_mi(Eo1, Ao, dat$haul_weight,  n, dat$po2, dat$invtemp)
+
+##Scale and such
+dat$temp_s <- (scale(dat$temperature_C))
+dat$po2_s <- (scale(dat$po2))
+dat$mi1_s <-(scale(dat$mi1))
+dat$mi2_s <-(scale(dat$mi2))
+dat$mi3_s <-(scale(dat$mi3))
+dat$mi5_s <- scale(dat$mi5)
+
+#Reorder columns
+if(spc!="pacific halibut"){
+dat <- relocate(dat, scientific_name, common_name, project, survey, year, date, doy, depth, longitude, latitude, cpue_kg_km2, cpue_kg_km2_sub, salinity_psu, temperature_C, sigma0_kgm3, p_dbar, do_mlpL, O2_umolkg, log_depth_scaled, log_depth_scaled2, X, Y, invtemp, mi1, mi2, mi3, mi5, temp_s, po2_s, mi1_s, mi2_s, mi3_s, mi5_s, p1,p2,p3,p4,median_weight, mean_weight, haul_weight, nlength, pass, vessel, tow, bottom_temperature_c)
+}
+if(spc=="pacific halibut"){
+dat <- relocate(dat, scientific_name, common_name, project, survey, year, date, doy, depth, longitude, latitude, cpue_kg_km2, cpue_kg_km2_sub,cpue_o32_weight, cpue_u32_weight, salinity_psu, temperature_C, sigma0_kgm3, p_dbar, do_mlpL, O2_umolkg, log_depth_scaled, log_depth_scaled2, X, Y, invtemp, mi1, mi2, mi3, mi5, temp_s, po2_s, mi1_s, mi2_s, mi3_s, mi5_s, p1,p2,p3,p4,median_weight, mean_weight, haul_weight, nlength, pass, vessel, tow, bottom_temperature_c)
+  
+}
+}
 try(return(dat))
 }
 
@@ -1593,4 +1710,6 @@ calc_sigma <- function(s, t, p) {
 }
 
 # convert ml /l to umol / kg
-convert_o2 <- function(o2ml_l, sigma) (o2ml_l * 44.660)/((1000 + sigma)/1000)
+convert_o2 <- function(o2ml_l, sigma){
+  (o2ml_l * 44.660)/((1000 + sigma)/1000)
+}

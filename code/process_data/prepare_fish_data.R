@@ -14,11 +14,12 @@ theme_update(panel.grid.major = element_blank(), panel.grid.minor = element_blan
 sci_name <- "anoplopoma fimbria" 
 spc <- "sablefish" 
 
-dat_sablefish <- prepare_data(spc=spc, sci_name=sci_name, ROMS=F, GLORYS=F)
+insitu <- readRDS("/Users/jindiv/Library/CloudStorage/Dropbox/choke species/code/choke-species-data/data/processed_data/insitu_combined.rds")
+dat_sablefish <- prepare_data(spc=spc, sci_name=sci_name, ROMS=F, GLORYS=F, in_situ=insitu)
 
-dat_pcod <- prepare_data(spc="pacific cod", sci_name="gadus macrocephalus", ROMS=F, GLORYS=F)
-dat_arrowtooth <- prepare_data(spc="arrowtooth flounder", sci_name="atheresthes stomias", ROMS=F, GLORYS=F)
-dat_halibut <- prepare_data(spc="pacific halibut", sci_name="hippoglossus stenolepis", ROMS=F, GLORYS=F)
+dat_pcod <- prepare_data(spc="pacific cod", sci_name="gadus macrocephalus", ROMS=F, GLORYS=F, in_situ=insitu)
+dat_arrowtooth <- prepare_data(spc="arrowtooth flounder", sci_name="atheresthes stomias", ROMS=F, GLORYS=F, in_situ=insitu)
+dat_halibut <- prepare_data(spc="pacific halibut", sci_name="hippoglossus stenolepis", ROMS=F, GLORYS=F, in_situ=insitu)
 
 saveRDS(dat_pcod, "data/processed_data/dat_pcod.rds")
 saveRDS(dat_arrowtooth, "data/processed_data/dat_aflounder.rds")

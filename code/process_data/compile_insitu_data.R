@@ -105,7 +105,6 @@ iphc$sigma0_kgm3 = gsw_sigma0(SA,CT)
 iphc$O2_umolkg = iphc$do_mlpL*44660/(iphc$sigma0_kgm3+1000) 
 
 #Convert coordinates
-#Remove with missing coordinates
 iphc <- iphc %>%
   st_as_sf(coords=c('longitude','latitude'),crs=4326,remove = F) %>%  
   st_transform(crs = "+proj=utm +zone=10 +datum=WGS84 +units=km") %>% 
@@ -179,7 +178,16 @@ goa <- goa %>%
 #Add survey column
 goa$survey <- "afsc"
 
-##New years of Bering Sea data--this doesn't actually seem to have oxygen
+##New years of Bering Sea data--
+library(ncdf4)
+filename <- "data/oxygen options/GAPCTD_2023_EBS.nc"
+con <- ncdf4::nc_open(filename))
+
+# Bottom
+ncvar_get(nc = con, varid = "sea_floor_dissolved_oxygen")[ncvar_get(nc = con, varid = "vessel") == 162]
+
+# Profiles
+ncvar_get(nc = con, varid = "sea_water_dissolved_oxygen")[ncvar_get(nc = con, varid = "vessel") == 162]
 
 
 #Bind all together
