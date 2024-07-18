@@ -687,51 +687,26 @@ load_data_afsc <- function(sci_name, spc, dat.by.size, length=T) {
 
 length_expand_bc <- function(sci_name, spc) {
   # load, clean, and join data
-  bio_qc <- read.csv("data/fish_raw/BC/QCS_biology.csv")
-  bio_vi <- read.csv("data/fish_raw/BC/WCVI_biology.csv")
-  bio_hs <- read.csv("data/fish_raw/BC/HS_biology.csv")
-  bio_hg <- read.csv("data/fish_raw/BC/WCHG_biology.csv")
-  itis  <- readRDS("data/fish_raw/BC/itis_bc.rds")
-  
+  itis <- readRDS("data/fish_raw/BC/species-table.rds")
   haul <- readRDS("data/fish_raw/BC/pbs-haul.rds")
   catch <- readRDS("data/fish_raw/BC/pbs-catch.rds")
+  bio2 <- readRDS("data/fish_raw/BC/pbs-bio-samples.rds")
   
-  haul_qc <- read.csv("data/fish_raw/BC/QCS_effort.csv")
-  haul_vi <- read.csv("data/fish_raw/BC/WCVI_effort.csv")
-  haul_hs <- read.csv("data/fish_raw/BC/HS_effort.csv")
-  haul_hg <- read.csv("data/fish_raw/BC/WCHG_effort.csv")
+  #Merge the official BC bio data and the official BC haul data to get metadata (from Sean, or here: https://open.canada.ca/data/en/dataset/86af7918-c2ab-4f1a-ba83-94c9cebb0e6c)
+  bio <- dplyr::full_join(bio2, haul, by="event_id", relationship="many-to-many")
   
-  #Combine BC bio and haul data to combine together
-  bio2 <- rbind(bio_hg, bio_hs, bio_qc, bio_vi)
-  haul2 <- rbind(haul_hg, haul_hs, haul_qc, haul_vi)
-  
-  #Merge the official BC bio data and the official BC haul data to get metadata (from here: https://open.canada.ca/data/en/dataset/86af7918-c2ab-4f1a-ba83-94c9cebb0e6c)
-  bio2$Set.number <- bio2$Tow.number
-  bio <- dplyr::full_join(bio2, haul2, relationship="many-to-many")
-  
-  names(bio) = tolower(names(bio))
-  names(haul) = tolower(names(haul))
+  #Combine with species data
+  bio <- dplyr::full_join(bio, itis, by="itis", relationship="many-to-many")
   
   #Put bio data in the same format as the NOAA bio data
-  bio$scientific_name <- tolower(bio$scientific.name)
-  bio$common_name <- tolower(bio$english.common.name)
-  bio$weight <- bio$weight..g.*0.001
-  bio$length_cm <- bio$fork.length..mm.*0.1
-  bio$length_cm <- ifelse(is.na(bio$length_cm), (bio$total.length..mm.*0.1), bio$length_cm)
-  
-  #Make column names consistent so can join to surveyjoin haul data to get event_id
-  haul$year <- as.character(substr(haul$date, start=1, stop=4))
-  bio$year <- as.character(bio$survey.year)
-  haul$set.date <- substr(haul$date, start=1, stop=10)
-  bio$lat_start <- bio$start.latitude
-  bio$lat_end <- bio$end.latitude
-  bio$lon_start <- bio$start.longitude
-  bio$lon_end <- bio$end.longitude
-  
-  #Combine BC bio data and haul metadata with surveyjoin metadata
-  bio3 <- dplyr::full_join(bio[,c("age", "sex", "length_cm", "weight", "scientific_name", "common_name", "lat_start", "lon_start", "lat_end", "lon_end", "set.date")], haul, relationship="many-to-many")
-  bio <- bio3
-  
+  #Convert g to kg
+  bio$weight <- bio$weight*0.001
+
+  #rename columnns
+  bio$scientific_name <- bio$species_science_name
+  bio$common_name <- bio$species_common_name
+  bio$length_cm <- bio$length
+      
   #Clean catch data
   names(catch) = tolower(names(catch))
 
@@ -749,9 +724,12 @@ length_expand_bc <- function(sci_name, spc) {
     bio$scientific_name <- ifelse(str_detect(bio$scientific_name, "sebastes aleutianus"), "sebastes aleutianus", bio$scientific_name)
     bio$common_name <- ifelse(str_detect(bio$common_name, "rougheye"), "rougheye rockfish", bio$common_name)
   }
-  
+  dat$scientific_name <- dat$species_science_name
+  dat$common_name <- dat$species_common_name
+  dat$species_science_name <- NULL
+  dat$species_common_name <- NULL
   #Combine bio/haul data with catch data
-  dat <- dplyr::left_join(dat, filter(bio[,c("event_id", "age", "sex","length_cm", "weight", "scientific_name", "common_name")], !is.na(length_cm)), relationship = "many-to-many")
+  dat <- dplyr::left_join(dat, filter(bio[,c("event_id", "age","length_cm", "weight", "scientific_name", "common_name")], !is.na(length_cm)), relationship = "many-to-many")
   
   # filter out species of interest from joined (catch/haul/bio) dataset
   dat_sub = dplyr::filter(dat, scientific_name==sci_name)
@@ -909,9 +887,6 @@ load_data_bc <- function(sci_name,dat.by.size, length=T, spc) {
   catch <- readRDS("data/fish_raw/BC/pbs-catch.rds")
   haul <- readRDS("data/fish_raw/BC/pbs-haul.rds")
   itis  <- readRDS("data/fish_raw/BC/itis_bc.rds")
-  
-  #Clean catch data
-  names(catch) = tolower(names(catch))
 
   catch <- left_join(catch,itis)
   
@@ -921,7 +896,6 @@ load_data_bc <- function(sci_name,dat.by.size, length=T, spc) {
   #Combine catch data with haul data
   dat <- dplyr::left_join(catch, haul, relationship = "many-to-many")
   
-  names(dat) = tolower(names(dat))
  # dat.by.size$event_id <- as.character(dat.by.size$event_id)
   dat = dplyr::filter(dat, scientific_name == sci_name)
   dat <- left_join(dat, dat.by.size, by = "event_id")
@@ -953,8 +927,10 @@ load_data_bc <- function(sci_name,dat.by.size, length=T, spc) {
   dat$year <- as.integer(dat$year)
   dat$date <- as.POSIXct(as.Date(dat$date, format = "%Y-%b-%d"))
   dat$project <- dat$survey_name
+  dat$salinity_psu <- dat$salinity_PSU
+  dat$salinity_PSU <- NULL
   dat <- dplyr::select(dat, event_id, scientific_name, project, year, date, longitude_dd, latitude_dd, longitude, latitude, cpue_kg_km2,
-                       depth_m, julian_day, nlength,median_weight, haul_weight, pass, p1, p2, p3, p4)
+                       depth_m, julian_day, nlength,median_weight, haul_weight, pass, p1, p2, p3, p4, temperature_C, do_mlpL, salinity_psu)
   dat <- filter(dat, !is.na(latitude_dd))
   
   
@@ -972,6 +948,14 @@ load_data_bc <- function(sci_name,dat.by.size, length=T, spc) {
   dat$common_name <- spc
   dat$depth <- dat$depth_m
   dat$depth_m <- NULL
+  
+  #convert oxygen mg/L to umol_kg
+  SA = gsw_SA_from_SP(dat$salinity_psu,dat$depth,dat$longitude,dat$latitude) #absolute salinity for pot T calc
+  pt = gsw_pt_from_t(SA,dat$temperature_C,dat$depth) #potential temp at a particular depth
+  CT = gsw_CT_from_t(SA,dat$temperature_C,dat$depth) #conservative temp
+  dat$sigma0_kgm3 = gsw_sigma0(SA,CT)
+  dat$O2_umolkg = dat$do_mlpL*44660/(dat$sigma0_kgm3+1000) 
+  
   return(dat)
 }
 
@@ -1441,25 +1425,39 @@ if(GLORYS==F & ROMS==F){
 
 ###Add in situ data####
 if(GLORYS==F & ROMS==F){
+#Isolate just NWFSC and EBS/NBS/GOA data for joining
 insitu <- filter(insitu, survey!="iphc")
-dat <- left_join(dat, insitu, by=c("date", "latitude", "longitude"))
+insitu <- filter(insitu, survey!="dfo")
+dat6 <- filter(dat4, project=="EBS"|project=="NBS"|project=="NWFSC.Combo"|project=="GOA")
+#Just columns of interest
+dat6 <- left_join(dat6[,c("event_id", "date", "year", "project", "latitude", "longitude", "depth", "X", "Y", "cpue_kg_km2", "julian_day", "nlength", "median_weight", "haul_weight", "pass", "p1", "p2", "p3", "p4", "common_name", "scientific_name", "depth", "vessel", "tow", "bottom_temperature_c")], insitu, by=c("date", "latitude", "longitude"))
 #Edit columns
-dat$event_id.x <- dat$event_id
-dat$event_id.x <- NULL
-dat$event_id.y <- NULL
-dat$year <- dat$year.x
-dat$year.y <- NULL
-dat$year.x <- NULL
-dat$depth <- dat$depth.x
-dat$depth.x <- NULL
-dat$depth.y <- NULL
-dat$survey <- NULL
-dat$X <- dat$X.x
-dat$Y <- dat$Y.x
-dat$X.x <- NULL
-dat$X.y <- NULL
-dat$Y.x <- NULL
-dat$Y.y <- NULL
+dat6$event_id <- dat6$event_id.x
+dat6$event_id.x <- NULL
+dat6$event_id.y <- NULL
+dat6$year <- dat6$year.x
+dat6$year.y <- NULL
+dat6$year.x <- NULL
+dat6$depth <- dat6$depth.x
+dat6$depth.x <- NULL
+dat6$depth.y <- NULL
+dat6$survey <- NULL
+dat6$X <- dat6$X.x
+dat6$Y <- dat6$Y.x
+dat6$X.x <- NULL
+dat6$X.y <- NULL
+dat6$Y.x <- NULL
+dat6$Y.y <- NULL
+dat6$depth.1 <- NULL
+dat6$month <- NULL
+dat6$doy <- NULL
+
+#Recombine back with DFO data
+dat <- bind_rows(dat6, dat3)
+
+dat$doy <- dat$julian_day
+dat$julian_day <- NULL
+dat$month <- month(dat$date)
 
 #Add IPHC data
 if(spc=="pacific halibut"){
@@ -1471,13 +1469,12 @@ if(spc=="pacific halibut"){
 
 
 #Some other columns
-dat$survey<- ifelse(str_detect(dat$project, "SYN"), "DFO_Pacific", dat$project)
+dat$survey<- ifelse(str_detect(dat$project, "SYN"), "dfo", dat$project)
 dat$cpue_kg_km2_sub <- dat$cpue_kg_km2 * (dat$p2+dat$p3)
 dat$cpue_kg_km2_sub <- ifelse(dat$cpue_kg_km2==0, 0, dat$cpue_kg_km2_sub)
 dat$log_depth_scaled <- scale(log(dat$depth))
 dat$log_depth_scaled2 <- with(dat, log_depth_scaled ^ 2)
-dat$doy <- dat$julian_day
-dat$julian_day <- NULL
+
 ##Calculate metabolic index
 ## Convert oxygen from glorys concentration (mmol/m^3) to kPa
 
@@ -1518,10 +1515,10 @@ dat$mi5_s <- scale(dat$mi5)
 
 #Reorder columns
 if(spc!="pacific halibut"){
-dat <- relocate(dat, scientific_name, common_name, project, survey, year, date, doy, depth, longitude, latitude, cpue_kg_km2, cpue_kg_km2_sub, salinity_psu, temperature_C, sigma0_kgm3, p_dbar, do_mlpL, O2_umolkg, log_depth_scaled, log_depth_scaled2, X, Y, invtemp, mi1, mi2, mi3, mi5, temp_s, po2_s, mi1_s, mi2_s, mi3_s, mi5_s, p1,p2,p3,p4,median_weight, mean_weight, haul_weight, nlength, pass, vessel, tow, bottom_temperature_c)
+dat <- relocate(dat, scientific_name, common_name, project, survey, year, date, doy, month, depth, longitude, latitude, cpue_kg_km2, cpue_kg_km2_sub, salinity_psu, temperature_C, po2, sigma0_kgm3,do_mlpL, O2_umolkg, log_depth_scaled, log_depth_scaled2, X, Y, invtemp, mi1, mi2, mi3, mi5, temp_s, po2_s, mi1_s, mi2_s, mi3_s, mi5_s, p1,p2,p3,p4,median_weight, mean_weight, haul_weight, nlength, pass, vessel, tow, bottom_temperature_c)
 }
 if(spc=="pacific halibut"){
-dat <- relocate(dat, scientific_name, common_name, project, survey, year, date, doy, depth, longitude, latitude, cpue_kg_km2, cpue_kg_km2_sub,cpue_o32_weight, cpue_u32_weight, salinity_psu, temperature_C, sigma0_kgm3, p_dbar, do_mlpL, O2_umolkg, log_depth_scaled, log_depth_scaled2, X, Y, invtemp, mi1, mi2, mi3, mi5, temp_s, po2_s, mi1_s, mi2_s, mi3_s, mi5_s, p1,p2,p3,p4,median_weight, mean_weight, haul_weight, nlength, pass, vessel, tow, bottom_temperature_c)
+dat <- relocate(dat, scientific_name, common_name, project, survey, year, date, doy, month, depth, longitude, latitude, cpue_kg_km2, cpue_kg_km2_sub,cpue_o32_weight, cpue_u32_weight, salinity_psu, temperature_C, po2, sigma0_kgm3, do_mlpL, O2_umolkg, log_depth_scaled, log_depth_scaled2, X, Y, invtemp, mi1, mi2, mi3, mi5, temp_s, po2_s, mi1_s, mi2_s, mi3_s, mi5_s, p1,p2,p3,p4,median_weight, mean_weight, haul_weight, nlength, pass, vessel, tow, bottom_temperature_c)
   
 }
 }
