@@ -15,42 +15,30 @@ basewd <-"/Users/jindiv/Library/CloudStorage/Dropbox/choke species/code/choke-sp
 setwd(basewd)
 source("code/util_funs.R")
 
-### Thompson-gathered in situ data
-thompson <- readRDS("data/oxygen options/PotentialDensityData.RDS")
+###BC
+dfo<- readRDS("data/fish_raw/BC/pbs-haul.rds")
+dfo <- dfo[,c("event_id", "date", "lat_start", "lon_start", "depth_m", "year", "temperature_C", "do_mlpL", "salinity_PSU")]
 
-#Convert coordinates
+dfo$date <- as.POSIXct(as.Date(dfo$date,format = "%Y-%m-%d"))
 
-#Convert O2
-thompson$O2_umolkg <- convert_o2(thompson$do_mlpL, thompson$sigma0_kgm3)
-
-#Isolate just the DFO data
-dfo <- subset(thompson, Survey=="DFO_Pacific")
-
-#Convert pressure to depth
-dfo$depth <- p2d(lat = dfo$latitude,
-                          p = dfo$p_dbar)
-
-#Try to match to haul data
-haul_qc <- read.csv("data/fish_raw/BC/QCS_effort.csv")
-haul_vi <- read.csv("data/fish_raw/BC/WCVI_effort.csv")
-haul_hs <- read.csv("data/fish_raw/BC/HS_effort.csv")
-haul_hg <- read.csv("data/fish_raw/BC/WCHG_effort.csv")
-
-#Combine BC bio and haul data to combine together
-haul2 <- rbind(haul_hg, haul_hs, haul_qc, haul_vi)
-haul_bc <- haul2[,c("Survey.Year", "Set.date", "Start.latitude", "Start.longitude", "Bottom.depth..m.")]
-colnames(haul_bc) <- c("year", "date", "latitude", "longitude", "depth_haul")
-
-dfo <- left_join(dfo, haul_bc, by=c("year", "latitude", "longitude"))
-dfo <- dfo[,c("Survey", "year", "month", "date", "latitude", "longitude", "salinity", "temperature_C", "p_dbar", "do_mlpL", "sigma0_kgm3","O2_umolkg","depth_haul")]
-colnames(dfo) <- c("survey", "year", "month", "date", "latitude", "longitude", "salinity_psu", "temperature_C", "p_dbar", "do_mlpL", "sigma0_kgm3","O2_umolkg","depth")
-
-dfo$date <- as.POSIXct(dfo$date,format = "%Y-%m-%d")
+colnames(dfo) <- c("event_id", "date", "latitude", "longitude", "depth", "year", "temperature_C", "do_mlpL", "salinity_psu")
 
 dfo<- dfo %>%
   st_as_sf(coords=c('longitude','latitude'),crs=4326,remove = F) %>%  
   st_transform(crs = "+proj=utm +zone=10 +datum=WGS84 +units=km") %>% 
   mutate(X=st_coordinates(.)[,1],Y=st_coordinates(.)[,2]) 
+
+dfo$month <- month(dfo$date)
+
+#convert oxygen mg/L to umol_kg
+SA = gsw_SA_from_SP(dfo$salinity_psu,dfo$depth,dfo$longitude,dfo$latitude) #absolute salinity for pot T calc
+pt = gsw_pt_from_t(SA,dfo$temperature_C,dfo$depth) #potential temp at a particular depth
+CT = gsw_CT_from_t(SA,dfo$temperature_C,dfo$depth) #conservative temp
+dfo$sigma0_kgm3 = gsw_sigma0(SA,CT)
+dfo$O2_umolkg = dfo$do_mlpL*44660/(dfo$sigma0_kgm3+1000) 
+
+#survey
+dfo$survey <- "dfo"
 
 #NWFSC trawl survey data
 nwfsc <- readRDS("data/oxygen options/joined_nwfsc_data.RDS")
@@ -135,7 +123,7 @@ afsc <- afsc %>%
   mutate(X=st_coordinates(.)[,1],Y=st_coordinates(.)[,2]) 
 
 #Add survey column
-afsc$survey <- "afsc"
+afsc$survey <- "EBS"
 
 ###GOA
 goa <- read.csv("data/oxygen options/OceanGOA2013.csv")
@@ -176,19 +164,46 @@ goa <- goa %>%
   mutate(X=st_coordinates(.)[,1],Y=st_coordinates(.)[,2]) 
 
 #Add survey column
-goa$survey <- "afsc"
+goa$survey <- "goa"
 
 ##New years of Bering Sea data--
 library(ncdf4)
 filename <- "data/oxygen options/GAPCTD_2023_EBS.nc"
-con <- ncdf4::nc_open(filename))
+con <- ncdf4::nc_open(filename)
+names(con$var)
 
 # Bottom
-ncvar_get(nc = con, varid = "sea_floor_dissolved_oxygen")[ncvar_get(nc = con, varid = "vessel") == 162]
+ do_mlpL <- as.numeric(ncvar_get(nc = con, varid = "sea_floor_dissolved_oxygen")[ncvar_get(nc = con, varid = "vessel") == 162])
+ latitude <- as.numeric(ncvar_get(nc=con, varid="latitude")[ncvar_get(nc = con, varid = "vessel") == 162])
+ longitude <- as.numeric(ncvar_get(nc=con, varid="latitude")[ncvar_get(nc = con, varid = "vessel") == 162])
+ temperature_C <- as.numeric(ncvar_get(nc=con, varid="sea_floor_temperature")[ncvar_get(nc = con, varid = "vessel") == 162])
+ salinity_psu <- as.numeric(ncvar_get(nc=con, varid="sea_floor_salinity")[ncvar_get(nc = con, varid = "vessel") == 162])
+ time <- as.Date(ncvar_get(nc=con, varid="time")[ncvar_get(nc = con, varid = "vessel") == 162])
+ depth <- as.numeric(ncvar_get(nc=con, varid="haul_depth")[ncvar_get(nc = con, varid = "vessel") == 162])
 
-# Profiles
-ncvar_get(nc = con, varid = "sea_water_dissolved_oxygen")[ncvar_get(nc = con, varid = "vessel") == 162]
+afsc2 <- as.data.frame(cbind(depth, latitude, longitude, do_mlpL, salinity_psu, temperature_C))
+afsc2$date <- as.Date(time)
 
+#Date and month in right format
+afsc2$date <- as.POSIXct(afsc2$date,format = "%Y-%b-%d")
+afsc2$month <- month(afsc2$date)
+afsc2$year <- year(afsc2$date)
+
+#convert oxygen ppm to umol_kg
+SA = gsw_SA_from_SP(afsc2$salinity_psu,afsc2$depth,afsc2$longitude,afsc2$latitude) #absolute salinity for pot T calc
+pt = gsw_pt_from_t(SA,afsc2$temperature_C,afsc2$depth) #potential temp at a particular depth
+CT = gsw_CT_from_t(SA,afsc2$temperature_C,afsc2$depth) #conservative temp
+afsc2$sigma0_kgm3 = gsw_sigma0(SA,CT)
+
+#Convert coordinates
+#Remove with missing coordinates
+afsc2 <- afsc2 %>%
+  st_as_sf(coords=c('longitude','latitude'),crs=4326,remove = F) %>%  
+  st_transform(crs = "+proj=utm +zone=10 +datum=WGS84 +units=km") %>% 
+  mutate(X=st_coordinates(.)[,1],Y=st_coordinates(.)[,2]) 
+
+#Add survey column
+afsc2$survey <- "EBS"
 
 #Bind all together
 afsc <- as.data.frame(afsc)
@@ -196,9 +211,11 @@ iphc <- as.data.frame(iphc)
 nwfsc2 <- as.data.frame(nwfsc2)
 dfo <- as.data.frame(dfo)
 goa <- as.data.frame(goa)
-insitu_combined <- bind_rows(dfo, nwfsc2, iphc, afsc)
+afsc2 <- as.data.frame(afsc2)
+insitu_combined <- bind_rows(dfo, nwfsc2, iphc, goa, afsc, afsc2)
 
 insitu_combined$date <-as.POSIXct(as.Date(insitu_combined$date),format = "%Y-%b-%d")
+insitu_combined$doy <-  as.POSIXlt(insitu_combined$date, format = "%Y-%b-%d")$yday
 
 #Save
 saveRDS(insitu_combined, file="data/processed_data/insitu_combined.rds")
