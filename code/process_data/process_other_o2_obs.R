@@ -5,8 +5,9 @@ library(lubridate)
 library(sf)
 library(seacarb)
 
-basewd <-"/Users/jindiv/Library/CloudStorage/Dropbox/choke species/code/choke-species-data"
-setwd(basewd)
+#basewd <-"/Users/jindiv/Library/CloudStorage/Dropbox/choke species/code/choke-species-data"
+#setwd(basewd)
+
 source("code/util_funs.R")
 
 
@@ -68,14 +69,14 @@ dat1 <- read.csv("data/oxygen options/LineP.csv")
 colnames(dat1) <- tolower(colnames(dat1))
 
 #Subset columns
-dat1 <- dat1[,c("year_utc", "month_utc", "day_utc", "yearday_utc", "longitude_dec", "latitude_dec", "depth_meter", "salinity_pss78", "oxygen_umol_kg", "oxygen_flag_w", "tmp_reversing_deg_c")]
+dat1 <- dat1[,c("year_utc", "month_utc", "day_utc", "yearday_utc", "longitude_dec", "latitude_dec", "ctdprs_dbar", "ctdsal_pss78", "oxygen_umol_kg", "oxygen_flag_w", "ctdtmp_its90_deg_c")]
 
 #Remove bad oxygen dat1a
 dat1 <-subset(dat1, oxygen_flag_w==2)
 dat1$oxygen_flag_w <- NULL
 
 #Rename columns
-colnames(dat1) <- c("year", "month", "day", "doy","longitude", "latitude", "depth", "salinity_psu", "O2_umolkg", "temperature_C")
+colnames(dat1) <- c("year", "month", "day", "doy","longitude", "latitude", "pressure_dbar", "salinity_psu", "O2_umolkg", "temperature_C")
 
 #Get date in correct format
 year <- dat1$year
@@ -84,6 +85,13 @@ day <- dat1$day
 dat1$date <- as.POSIXct(as.Date(with(dat1,paste(year,month,day,sep="-")),"%Y-%m-%d"))
 dat1$day <- NULL
 
+# remove missing data flags
+dat1 <- dat1 %>%
+  filter(!pressure_dbar==-999, !temperature_C==-999, !salinity_psu == -999)
+
+# convert pressure to depth 
+dat1$depth <- p2d(lat = dat1$latitude,
+                          p = dat1$pressure_dbar)
 #Convert coordinates
 #Remove with missing coordinates
 dat1 <- dat1 %>%
@@ -103,6 +111,7 @@ dat1$type <- "bottle"
 
 #Remove missing oxygen
 dat1 <- subset(dat1, !is.na(O2_umolkg))
+
 
 #Filter by deepest depth
 dat1 <- dat1 %>% group_by(longitude, latitude, date) %>%
