@@ -1454,7 +1454,13 @@ dat6$month <- NULL
 dat6$doy <- NULL
 
 #Recombine back with DFO data
+if(exists("dat3")){
 dat <- bind_rows(dat6, dat3)
+}
+
+if(!exists("dat3")){
+  dat <- dat6
+}
 
 dat$doy <- dat$julian_day
 dat$julian_day <- NULL
