@@ -1,10 +1,11 @@
+
 library(dplyr)
 library(devtools)
-install_github("ropensci/taxize")
+#install_github("ropensci/taxize")
 library(taxize)
-install.packages("rfishbase")
+#install.packages("rfishbase")
 library(rfishbase)
-install.packages("gsw")
+#install.packages("gsw")
 library(gsw)
 library(readxl)
 library(stringr)
@@ -1716,3 +1717,5 @@ calc_sigma <- function(s, t, p) {
 convert_o2 <- function(o2ml_l, sigma){
   (o2ml_l * 44.660)/((1000 + sigma)/1000)
 }
+
+rsq <- function(x, y) cor(x,y) * cor(x,y)
