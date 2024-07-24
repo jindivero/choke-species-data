@@ -37,6 +37,8 @@ CT = gsw_CT_from_t(SA,dfo$temperature_C,dfo$depth) #conservative temp
 dfo$sigma0_kgm3 = gsw_sigma0(SA,CT)
 dfo$O2_umolkg = dfo$do_mlpL*44660/(dfo$sigma0_kgm3+1000) 
 
+dfo$year <- ifelse(is.na(dfo$year), year(dfo$date), dfo$year)
+
 #survey
 dfo$survey <- "dfo"
 
@@ -78,12 +80,17 @@ colnames(iphc) <- tolower(colnames(iphc))
 iphc <- iphc[,c("year", "date", "beginlat", "beginlon", "begindepth (fm)", "temp c", "salinity psu", "oxygen_ml")]
 colnames(iphc) <- c("year", "date", "latitude", "longitude", "depth", "temperature_C", "salinity_psu", "do_mlpL")
 
-#Date and month in right format
-iphc$month <- month(ymd(iphc$date))
-iphc$day <- day(ymd(iphc$date))
+#Date and month in correct format
+iphc$month <- case_when(grepl("May",iphc$date) ~5,
+                       grepl("Jun",iphc$date)  ~6,
+                       grepl("Jul",iphc$date)  ~7,
+                       grepl("Aug",iphc$date)  ~8,
+                       grepl("Sep",iphc$date)  ~9,
+                       grepl("Oct",iphc$date)  ~10)
+iphc$day <- as.numeric(substr(iphc$date, 1,2))
 iphc$date <-  as.POSIXct(as.Date(with(iphc,paste(year,month,day,sep="-")),"%Y-%m-%d"))
-iphc$year <- as.numeric(iphc$year)
 iphc$day <- NULL
+iphc$year <- as.numeric(iphc$year)
 
 #convert oxygen mg/L to umol_kg
 SA = gsw_SA_from_SP(iphc$salinity_psu,iphc$depth,iphc$longitude,iphc$latitude) #absolute salinity for pot T calc
