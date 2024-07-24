@@ -5,8 +5,8 @@ library(lubridate)
 library(sf)
 library(seacarb)
 
-#basewd <-"/Users/jindiv/Library/CloudStorage/Dropbox/choke species/code/choke-species-data"
-#setwd(basewd)
+basewd <-"/Users/jindiv/Library/CloudStorage/Dropbox/choke species/code/choke-species-data"
+setwd(basewd)
 
 source("code/util_funs.R")
 
@@ -164,8 +164,8 @@ saveRDS(newport_data, "data/processed_data/newportline_processed.rds")
 ##WCOA: https://www.ncei.noaa.gov/access/ocean-carbon-acidification-data-system/oceans/Coastal/WCOA.html
 #Quality flags: OXYGEN_FLAG, WOCE quality control flags are used: 2 = good value, 3 = questionable value, 4 = bad value, 5 = value not reported, 6 = mean of replicate measurements, 9 = sample not drawn.
 #Read all files in, then combine into one
-all_files <- dir("data/oxygen options/WCOA")
 setwd("data/oxygen options/WCOA")
+all_files <- dir("/Users/jindiv/Library/CloudStorage/Dropbox/choke species/code/choke-species-data/data/oxygen options/WCOA")
 df.list <- lapply(all_files, read_excel)
 wcoa <- data.table::rbindlist(df.list, fill=T)
 #set WD back to normal
@@ -178,12 +178,12 @@ colnames(d1) <- tolower(colnames(d1))
 ctd <- subset(d1, ctdsal_flag==2 & ctdoxygen_flag==2)
 bottle <- subset(d1, salinty_flag==2 &oxygen_flag==2)
 
-ctd <- ctd[,c("date_utc", "year_utc", "month_utc", "latitude_decimal", "longitude_decimal", "ctdpressure_dbar", "ctdtemp_its90_deg_c","ctdsal_pss78", "ctdoxygen_umol_kg")]
-bottle<- bottle[,c("date_utc", "year_utc", "month_utc", "latitude_decimal", "longitude_decimal", "ctdpressure_dbar", "ctdtemp_its90_deg_c","salinity_pss78", "oxygen_umol_kg")]
+ctd <- ctd[,c("date_utc", "year_utc", "month_utc", "latitude_decimal", "longitude_decimal", "ctdpressure_dbar","depth_bottom_meter", "ctdtemp_its90_deg_c","ctdsal_pss78", "ctdoxygen_umol_kg")]
+bottle<- bottle[,c("date_utc", "year_utc", "month_utc", "latitude_decimal", "longitude_decimal", "ctdpressure_dbar", "depth_bottom_meter", "ctdtemp_its90_deg_c","salinity_pss78", "oxygen_umol_kg")]
 
 #Rename columns
-colnames(ctd) <- c("date", "year", "month", "latitude", "longitude", "pressure", "temperature_C", "salinity_psu", "O2_umolkg")
-colnames(bottle) <- c("date", "year", "month", "latitude", "longitude", "pressure", "temperature_C", "salinity_psu", "O2_umolkg")
+colnames(ctd) <- c("date", "year", "month", "latitude", "longitude", "pressure", "depth2", "temperature_C", "salinity_psu", "O2_umolkg")
+colnames(bottle) <- c("date", "year", "month", "latitude", "longitude", "pressure", "depth2", "temperature_C", "salinity_psu", "O2_umolkg")
 
 #Add type column
 ctd$type <- "ctd"
@@ -206,12 +206,12 @@ colnames(d1) <- tolower(colnames(d1))
 ctd <- subset(d1, ctdsal_flag==2 & ctdoxygen_flag==2)
 bottle <- subset(d1, salinty_flag==2 &oxygen_flag==2)
 
-ctd <- ctd[,c("date_utc", "year_utc", "month_utc", "latitude_decimal", "longitude_decimal", "ctdpressure_dbar", "ctdtemp_its90_deg_c","ctdsal_pss78", "ctdoxygen_umol_kg")]
-bottle<- bottle[,c("date_utc", "year_utc", "month_utc", "latitude_decimal", "longitude_decimal", "ctdpressure_dbar", "ctdtemp_its90_deg_c","salinity_pss78", "oxygen_umol_kg")]
+ctd <- ctd[,c("date_utc", "year_utc", "month_utc", "latitude_decimal", "longitude_decimal", "ctdpressure_dbar","depth_bottom_meter", "ctdtemp_its90_deg_c","ctdsal_pss78", "ctdoxygen_umol_kg")]
+bottle<- bottle[,c("date_utc", "year_utc", "month_utc", "latitude_decimal", "longitude_decimal", "ctdpressure_dbar", "depth_bottom_meter", "ctdtemp_its90_deg_c","salinity_pss78", "oxygen_umol_kg")]
 
 #Rename columns
-colnames(ctd) <- c("date", "year", "month", "latitude", "longitude", "pressure", "temperature_C", "salinity_psu", "O2_umolkg")
-colnames(bottle) <- c("date", "year", "month", "latitude", "longitude", "pressure", "temperature_C", "salinity_psu", "O2_umolkg")
+colnames(ctd) <- c("date", "year", "month", "latitude", "longitude", "pressure", "depth2", "temperature_C", "salinity_psu", "O2_umolkg")
+colnames(bottle) <- c("date", "year", "month", "latitude", "longitude", "pressure", "depth2", "temperature_C", "salinity_psu", "O2_umolkg")
 
 #Add type column
 ctd$type <- "ctd"
@@ -232,12 +232,12 @@ colnames(d1) <- tolower(colnames(d1))
 ctd <- subset(d1, ctdsal_flag==2 & ctdoxygen_flag==2)
 bottle <- subset(d1, salinty_flag==2 &oxygen_flag==2)
 
-ctd <- ctd[,c("date_utc", "year_utc", "month_utc", "latitude_decimal", "longitude_decimal", "ctdpressure_dbar", "ctdtemp_its90_deg_c","ctdsal_pss78", "ctdoxygen_umol_kg")]
-bottle<- bottle[,c("date_utc", "year_utc", "month_utc", "latitude_decimal", "longitude_decimal", "ctdpressure_dbar", "ctdtemp_its90_deg_c","salinity_pss78", "oxygen_umol_kg")]
+ctd <- ctd[,c("date_utc", "year_utc", "month_utc", "latitude_decimal", "longitude_decimal", "ctdpressure_dbar", "depth_bottom_meter", "ctdtemp_its90_deg_c","ctdsal_pss78", "ctdoxygen_umol_kg")]
+bottle<- bottle[,c("date_utc", "year_utc", "month_utc", "latitude_decimal", "longitude_decimal", "ctdpressure_dbar", "depth_bottom_meter", "ctdtemp_its90_deg_c","salinity_pss78", "oxygen_umol_kg")]
 
 #Rename columns
-colnames(ctd) <- c("date", "year", "month", "latitude", "longitude", "pressure", "temperature_C", "salinity_psu", "O2_umolkg")
-colnames(bottle) <- c("date", "year", "month", "latitude", "longitude", "pressure", "temperature_C", "salinity_psu", "O2_umolkg")
+colnames(ctd) <- c("date", "year", "month", "latitude", "longitude", "pressure","depth2", "temperature_C", "salinity_psu", "O2_umolkg")
+colnames(bottle) <- c("date", "year", "month", "latitude", "longitude", "pressure", "depth2", "temperature_C", "salinity_psu", "O2_umolkg")
 
 #Add type column
 ctd$type <- "ctd"
@@ -256,12 +256,12 @@ colnames(d1) <- tolower(colnames(d1))
 ctd <- subset(d1, ctdsal_flag==2 & ctdoxygen_flag==2)
 bottle <- subset(d1, salinty_flag==2 &oxygen_flag==2)
 
-ctd <- ctd[,c("date_utc", "year_utc", "month_utc", "latitude_decimal", "longitude_decimal", "ctdpressure_dbar", "ctdtemp_its90_deg_c","ctdsal_pss78", "ctdoxygen_umol_kg")]
-bottle<- bottle[,c("date_utc", "year_utc", "month_utc", "latitude_decimal", "longitude_decimal","ctdpressure_dbar", "ctdtemp_its90_deg_c","salinity_pss78", "oxygen_umol_kg")]
+ctd <- ctd[,c("date_utc", "year_utc", "month_utc", "latitude_decimal", "longitude_decimal", "ctdpressure_dbar", "depth_bottom_meter", "ctdtemp_its90_deg_c","ctdsal_pss78", "ctdoxygen_umol_kg")]
+bottle<- bottle[,c("date_utc", "year_utc", "month_utc", "latitude_decimal", "longitude_decimal","ctdpressure_dbar", "depth_bottom_meter", "ctdtemp_its90_deg_c","salinity_pss78", "oxygen_umol_kg")]
 
 #Rename columns
-colnames(ctd) <- c("date", "year", "month", "latitude", "longitude", "pressure", "temperature_C", "salinity_psu", "O2_umolkg")
-colnames(bottle) <- c("date", "year", "month", "latitude", "longitude", "pressure", "temperature_C", "salinity_psu", "O2_umolkg")
+colnames(ctd) <- c("date", "year", "month", "latitude", "longitude", "pressure", "depth2", "temperature_C", "salinity_psu", "O2_umolkg")
+colnames(bottle) <- c("date", "year", "month", "latitude", "longitude", "pressure", "depth2", "temperature_C", "salinity_psu", "O2_umolkg")
 
 #Add type column
 ctd$type <- "ctd"
@@ -280,12 +280,12 @@ colnames(d1) <- tolower(colnames(d1))
 ctd <- subset(d1, ctdsal_flag==2 & ctdoxygen_flag==2)
 bottle <- subset(d1, salinty_flag==2 &oxygen_flag==2)
 
-ctd <- ctd[,c("date_utc", "year_utc", "month_utc", "latitude_decimal", "longitude_decimal", "ctdpressure_dbar", "ctdtemp_its90_deg_c","ctdsal_pss78", "ctdoxygen_umol_kg")]
-bottle<- bottle[,c("date_utc", "year_utc", "month_utc", "latitude_decimal", "longitude_decimal", "ctdpressure_dbar", "ctdtemp_its90_deg_c","salinity_pss78", "oxygen_umol_kg")]
+ctd <- ctd[,c("date_utc", "year_utc", "month_utc", "latitude_decimal", "longitude_decimal", "ctdpressure_dbar", "depth_bottom_meter", "ctdtemp_its90_deg_c","ctdsal_pss78", "ctdoxygen_umol_kg")]
+bottle<- bottle[,c("date_utc", "year_utc", "month_utc", "latitude_decimal", "longitude_decimal", "ctdpressure_dbar", "depth_bottom_meter", "ctdtemp_its90_deg_c","salinity_pss78", "oxygen_umol_kg")]
 
 #Rename columns
-colnames(ctd) <- c("date", "year", "month", "latitude", "longitude", "pressure", "temperature_C", "salinity_psu", "O2_umolkg")
-colnames(bottle) <- c("date", "year", "month", "latitude", "longitude", "pressure", "temperature_C", "salinity_psu", "O2_umolkg")
+colnames(ctd) <- c("date", "year", "month", "latitude", "longitude", "pressure", "depth2", "temperature_C", "salinity_psu", "O2_umolkg")
+colnames(bottle) <- c("date", "year", "month", "latitude", "longitude", "pressure", "depth2", "temperature_C", "salinity_psu", "O2_umolkg")
 
 #Add type column
 ctd$type <- "ctd"
@@ -307,11 +307,11 @@ colnames(d1) <- tolower(colnames(d1))
 bottle <- subset(d1, salinty_flag==2 &oxygen_flag==2)
 
 #ctd <- ctd[,c("date_utc", "year_utc", "month_utc", "latitude_decimal", "longitude_decimal", "depth_bottom_meter", "ctdtemp_its90_deg_c","ctdsal_pss78", "ctdoxygen_umol_kg")]
-bottle<- bottle[,c("year_utc", "month_utc", "day_utc", "latitude_decimal", "longitude_decimal", "ctdpressure_dbar", "ctdtmp_its90_deg_c","salinity_pss78", "oxygen_umol_kg")]
+bottle<- bottle[,c("year_utc", "month_utc", "day_utc", "latitude_decimal", "longitude_decimal", "ctdpressure_dbar", "depth_bottom_meter", "ctdtmp_its90_deg_c","salinity_pss78", "oxygen_umol_kg")]
 
 #Rename columns
 #colnames(ctd) <- c("date", "year", "month", "latitude", "longitude", "depth", "temperature_C", "salinity_psu", "O2_umolkg")
-colnames(bottle) <- c( "year", "month", "day", "latitude", "longitude", "pressure", "temperature_C", "salinity_psu", "O2_umolkg")
+colnames(bottle) <- c( "year", "month", "day", "latitude", "longitude", "pressure", "depth2", "temperature_C", "salinity_psu", "O2_umolkg")
 
 #Add type column
 #ctd$type <- "ctd"
@@ -360,30 +360,31 @@ colnames(d1) <- tolower(colnames(d1))
 ctd <- subset(d1, ctdsal_flag==2 & ctdoxy_flag==2)
 bottle <- subset(d1, salinity_flag==2 & oxygen_flag==2)
 
-ctd <- ctd[,c("year_utc", "month_utc", "day_utc", "latitude", "longitude", "depth", "ctdtemp_its90","ctdsal_pss78", "ctdoxy")]
-bottle<- bottle[,c("year_utc", "month_utc", "day_utc", "latitude", "longitude", "depth", "ctdtemp_its90","salinity_pss78", "oxygen_djg")]
+ctd <- ctd[,c("year_utc", "month_utc", "day_utc", "latitude", "longitude", "ctdpres", "depth_bottom", "depth", "ctdtemp_its90","ctdsal_pss78", "ctdoxy")]
+bottle<- bottle[,c("year_utc", "month_utc", "day_utc", "latitude", "longitude", "ctdpres", "depth_bottom", "depth", "ctdtemp_its90","salinity_pss78", "oxygen_djg")]
 
 #Rename columns
-colnames(ctd) <- c("year", "month", "day", "latitude", "longitude", "depth", "temperature_C", "salinity_psu", "O2_umolkg")
-colnames(bottle) <- c("year", "month", "day", "latitude", "longitude", "depth", "temperature_C", "salinity_psu", "O2_umolkg")
+colnames(ctd) <- c("year", "month", "day", "latitude", "longitude", "pressure", "depth2", "depth3", "temperature_C", "salinity_psu", "O2_umolkg")
+colnames(bottle) <- c("year", "month", "day", "latitude", "longitude", "pressure", "depth2", "depth3", "temperature_C", "salinity_psu", "O2_umolkg")
+
+ctd <- mutate_all(ctd, as.numeric)
+bottle <- mutate_all(bottle, as.numeric)
+
+bottle$depth <- p2d(lat = as.numeric(bottle$latitude),
+                    p = as.numeric(bottle$pressure))
+ctd$depth <- p2d(lat = as.numeric(ctd$latitude),
+                    p = as.numeric(ctd$pressure))
 
 #Add type column
 ctd$type <- "ctd"
 bottle$type <-"bottle"
 
 wcoa_2021 <- bind_rows(ctd, bottle)
+wcoa_2021$pressure <- NULL
 
 #Get date
 wcoa_2021$date <- as.POSIXct(as.Date(with(wcoa_2021,paste(year,month,day,sep="-")),"%Y-%m-%d"))
 wcoa_2021$day <- NULL
-wcoa_2021$year <- as.numeric(wcoa_2021$year)
-wcoa_2021$month <- as.numeric(wcoa_2021$month)
-wcoa_2021$latitude <- as.numeric(wcoa_2021$latitude)
-wcoa_2021$longitude <- as.numeric(wcoa_2021$longitude)
-wcoa_2021$depth <- as.numeric(wcoa_2021$depth)
-wcoa_2021$temperature_C <- as.numeric(wcoa_2021$temperature_C)
-wcoa_2021$salinity_psu <- as.numeric(wcoa_2021$salinity_psu)
-wcoa_2021$O2_umolkg <- as.numeric(wcoa_2021$O2_umolkg)
 
 #####Combine all
 wcoa <- bind_rows(wcoa_2007, wcoa_2011, wcoa_2012, wcoa_2013, wcoa_2013b,wcoa_2016, wcoa_2017, wcoa_2021)
