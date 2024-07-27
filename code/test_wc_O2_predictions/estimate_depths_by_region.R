@@ -8,13 +8,12 @@ library(tidyverse)
 # playground code for creating grids, extract data for UW west coast only
 dat <- readRDS("data/processed_data/all_o2_dat.rds")
 
+# remove iphc for the moment to get lat and lon ranges of all measurements
 dat_noiphc <- dplyr::filter(dat, !survey == "iphc") # because this crosses over into Long E, creates problems with longitude range
 latrange <- range(dat_noiphc$latitude)
 lonrange <- range(dat_noiphc$longitude)
 
-wcbts <- dplyr::filter(dat, survey == "nwfsc")
-dfo <- dplyr::filter(dat, survey == "dfo")
-
+# get noaa bathymetry data
 noaa_depths <- getNOAA.bathy(lon1 = lonrange[1], 
                              lon2 = -117,
                              lat1 = latrange[1], 
