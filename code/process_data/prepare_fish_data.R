@@ -1,5 +1,6 @@
 #Prepare data
 setwd("/Users/jindiv/Library/CloudStorage/Dropbox/choke species/code/choke-species-data")
+setwd("/Users/jindivero/Dropbox/choke species/code/choke-species-data")
 source("code/util_funs.R")
 library(stringr)
 library(ggplot2)

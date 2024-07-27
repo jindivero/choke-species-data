@@ -1,10 +1,13 @@
 library(readxl)
+install.packages("lubridate")
 library(lubridate)
 install.packages("ggpubr")
 library(ggpubr)
+install.packages("seacarb")
 library(seacarb)
 library(dplyr)
 library(sf)
+install.packages("tidync")
 library(tidync)
 
 #Set ggplot themes 
@@ -12,6 +15,7 @@ theme_set(theme_bw(base_size = 25))
 theme_update(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
 
 basewd <-"/Users/jindiv/Library/CloudStorage/Dropbox/choke species/code/choke-species-data"
+
 setwd(basewd)
 source("code/util_funs.R")
 
@@ -182,7 +186,7 @@ names(con$var)
 # Bottom
  do_mlpL <- as.numeric(ncvar_get(nc = con, varid = "sea_floor_dissolved_oxygen")[ncvar_get(nc = con, varid = "vessel") == 162])
  latitude <- as.numeric(ncvar_get(nc=con, varid="latitude")[ncvar_get(nc = con, varid = "vessel") == 162])
- longitude <- as.numeric(ncvar_get(nc=con, varid="latitude")[ncvar_get(nc = con, varid = "vessel") == 162])
+ longitude <- as.numeric(ncvar_get(nc=con, varid="longitude")[ncvar_get(nc = con, varid = "vessel") == 162])
  temperature_C <- as.numeric(ncvar_get(nc=con, varid="sea_floor_temperature")[ncvar_get(nc = con, varid = "vessel") == 162])
  salinity_psu <- as.numeric(ncvar_get(nc=con, varid="sea_floor_salinity")[ncvar_get(nc = con, varid = "vessel") == 162])
  time <- as.Date(ncvar_get(nc=con, varid="time")[ncvar_get(nc = con, varid = "vessel") == 162])
