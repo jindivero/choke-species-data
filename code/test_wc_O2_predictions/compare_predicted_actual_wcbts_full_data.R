@@ -1,9 +1,7 @@
 library(tidync)
-library(lubridate)
 library(sf)
 library(dplyr)
 library(tidyr)
-library(sdmTMB)
 library(sdmTMB)
 library(seacarb)
 library(respR)
@@ -11,17 +9,19 @@ library(ggplot2)
 library(Metrics)
 library(rnaturalearth)
 library(gridExtra)
-library(RColorBrewer)
+
 fitmodel = TRUE
 save_model = TRUE
+plotmodel = T
+
 ### Set ggplot themes ###
 theme_set(theme_bw(base_size = 25))
 theme_update(panel.grid.major = element_blank(),
              panel.grid.minor = element_blank())
 
 # filename for saving / loading
-filename = "code/test_wc_O2_predictions/predict_partialyear_wcbts.Rdata"
-
+filename = "code/test_wc_O2_predictions/wcbts_predict_fullyear.Rdata"
+plot_string <-"figures/test_predictions/wcbts_predict_fullyear.pdf"
 #Get WD
 source("code/util_funs.R")
 source("code/test_wc_O2_predictions/helper_funs.R")
@@ -73,26 +73,17 @@ set.seed(1234)
 
 # Loop through years ####
 if (fitmodel) {
-  plot_string <- "figures/test_predictions/wcbts_predict_partial.pdf"
-  pdf(plot_string, onefile = TRUE)
+  if(plotmodel)    pdf(plot_string, onefile = TRUE)
+  
   
   for (i in 1:length(yearlist)) {
     ## Separate test and training data ####
     test_year <- yearlist[i]
-    region_year_data <- dat %>%
+    test_data <- dat %>%
       filter(survey == test_survey & year == test_year)
     
     train_data <- dat %>%
       filter(!(survey == test_survey & year == test_year))
-    
-    # randomly add one half of the region_year back into training data
-    
-    n_samples <- floor(0.5 * nrow(region_year_data))
-    keep_index <- sample(1:nrow(region_year_data), size = n_samples)
-    
-    test_data <- region_year_data[keep_index, ]
-    train_data <- rbind(train_data, region_year_data[-keep_index, ])
-    
     
     train_data <- as.data.frame(train_data)
     test_data <- as.data.frame(test_data)
@@ -135,7 +126,7 @@ if (fitmodel) {
     test_predict_O2$residual = test_predict_O2$O2_umolkg - (test_predict_O2$est)
     
     #@ Plot #### 
-    plot_predict(test_predict_O2, test_year, us_coast_proj)
+    if (plotmodel) plot_predict(test_predict_O2, test_year, us_coast_proj)
     
   }
   dev.off()
@@ -151,8 +142,7 @@ if (fitmodel) {
 # run this code if fitmodel = F ####
 if (!fitmodel) {
   load(file = filename)
-  #plot_string <-"figures/test_predictions/wcbts_predict_partial.pdf"
-  #pdf(plot_string, onefile = TRUE)
+  if(plotmodel) pdf(plot_string, onefile = TRUE)
   
   for (i in 1:length(yearlist)) {
     test_year <- yearlist[i]
@@ -176,6 +166,6 @@ if (!fitmodel) {
   rmse_total <- sqrt(sum(xminusxbarsq) / sum(n_testlist))
   print(rmse_total)
   
-  #  dev.off()
+  if(plotmodel)  dev.off()
   
 }
