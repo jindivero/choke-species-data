@@ -1,11 +1,9 @@
 #Prepare data
-setwd("/Users/jindiv/Library/CloudStorage/Dropbox/choke species/code/choke-species-data")
+#setwd("/Users/jindiv/Library/CloudStorage/Dropbox/choke species/code/choke-species-data")
 setwd("/Users/jindivero/Dropbox/choke species/code/choke-species-data")
 source("code/util_funs.R")
 library(stringr)
 library(ggplot2)
-
-setwd("/Users/jindiv/Library/CloudStorage/Dropbox/choke species/code/choke-species-data")
 
 ### Set ggplot themes ###
 theme_update(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
@@ -15,7 +13,7 @@ theme_update(panel.grid.major = element_blank(), panel.grid.minor = element_blan
 sci_name <- "anoplopoma fimbria" 
 spc <- "sablefish" 
 
-insitu <- readRDS("/Users/jindiv/Library/CloudStorage/Dropbox/choke species/code/choke-species-data/data/processed_data/insitu_combined.rds")
+insitu <- readRDS("data/processed_data/insitu_combined.rds")
 dat_sablefish <- prepare_data(spc=spc, sci_name=sci_name, ROMS=F, GLORYS=F, in_situ=insitu)
 
 dat_pcod <- prepare_data(spc="pacific cod", sci_name="gadus macrocephalus", ROMS=F, GLORYS=F, in_situ=insitu)

@@ -108,22 +108,27 @@ load_all_hauls <- function() {
 load_data_nwfsc <- function(spc,sci_name, dat.by.size, length=T) {
   dat <- readRDS("data/fish_raw/NOAA/nwfsc_catch.rds")
   names(dat) = tolower(names(dat))
-  dat.by.size$trawl_id <- as.character(dat.by.size$trawl_id)
   dat$common_name <- tolower(dat$common_name)
   dat = dplyr::filter(dat, common_name == spc)
+  if(is.data.frame(dat.by.size)){
+  dat.by.size$trawl_id <- as.character(dat.by.size$trawl_id)
   dat <- left_join(dat, dat.by.size, by = "trawl_id")
+  # remove tows where there was positive catch but no length measurements
+  }
+  if(!is.data.frame(dat.by.size)){
+    dat$nlength <- 0
+    dat$median_weight <- NA
+    dat$haul_weight <- NA
+    dat$p1 <- NA
+    dat$p2 <- NA
+    dat$p3 <- NA
+    dat$p4 <- NA
+  }
   # remove tows where there was positive catch but no length measurements
   if(length){
   dat <- dplyr::filter(dat, !is.na(p1))
   }
   # analyze or years and hauls with adequate oxygen and temperature data, within range of occurrence
-  
-  # get julian day
-  dat$julian_day <- rep(NA, nrow(dat))
-  for (i in 1:nrow(dat)){ 
-    dat$julian_day[i] <- as.POSIXlt(dat$date[i], format = "%Y-%b-%d")$yday
-  }
-  
   
   #O2 from trawl data is in ml/l 
   # just in case, remove any missing or nonsense values from sensors
@@ -135,7 +140,12 @@ load_data_nwfsc <- function(spc,sci_name, dat.by.size, length=T) {
   dat$longitude <- dat$longitude_dd
   dat$latitude <- dat$latitude_dd
   dat$event_id <- dat$trawl_id
-  dat$date <- as.POSIXct(as.Date(dat$date, format = "%Y-%b-%d"))
+  dat$date <- as.POSIXct(as.Date(as.POSIXct("1970-01-01")+as.difftime(dat$date,units="days")))
+  # get julian day
+  dat$julian_day <- rep(NA, nrow(dat))
+  for (i in 1:nrow(dat)){ 
+    dat$julian_day[i] <- as.POSIXlt(dat$date[i], format = "%Y-%b-%d")$yday
+  }
   dat <- dplyr::select(dat, event_id, common_name, project, vessel, tow, year, date, longitude_dd, latitude_dd, longitude, latitude, cpue_kg_km2,
                        depth_m, julian_day, nlength, median_weight, haul_weight, pass, p1, p2, p3, p4)
   
@@ -153,6 +163,7 @@ load_data_nwfsc <- function(spc,sci_name, dat.by.size, length=T) {
   dat$scientific_name <- sci_name
   dat$depth <- dat$depth_m
   dat$depth_m <- NULL
+  dat$survey <- "nwfsc"
   return(dat)
 }
 
@@ -161,33 +172,24 @@ load_data_nwfsc <- function(spc,sci_name, dat.by.size, length=T) {
 length_expand_nwfsc <- function(spc, sci_name) {
   # load, clean, and join data
   bio <- readRDS("data/fish_raw/NOAA/nwfsc_bio.rds")
-  load("data/fish_raw/NOAA/nwfsc_haul.rda")
-  haul <- nwfsc_haul
   catch <- readRDS("data/fish_raw/NOAA/nwfsc_catch.rds")
   names(catch) = tolower(names(catch))
   names(bio) = tolower(names(bio))
-  names(haul) = tolower(names(haul))
   bio$scientific_name <- tolower(bio$scientific_name)
   bio$common_name <- tolower(bio$common_name)
   catch$common_name <- tolower(catch$common_name)
   
   bio$trawl_id = as.character(bio$trawl_id)
-  haul$trawl_id = as.character(haul$event_id)
   catch$trawl_id=as.character(catch$trawl_id)
-  haul$year <- as.character(substr(haul$date, start=1, stop=4))
-  bio$year <- as.character(bio$year)
-  catch$date <- NULL
-  bio$date <- NULL
-  bio$year <- NULL
-  
+
   #haul$sampling_end_hhmmss = as.numeric(haul$sampling_end_hhmmss)
   #haul$sampling_start_hhmmss = as.numeric(haul$sampling_start_hhmmss)
   
   #Combine data
-  dat = dplyr::left_join(catch[,c("trawl_id","common_name", "subsample_count","area_swept_ha","longitude_dd", "latitude_dd",
-                                  "subsample_wt_kg","total_catch_numbers","total_catch_wt_kg","cpue_kg_km2")], haul, relationship = "many-to-many") %>%
-    dplyr::left_join(filter(bio[,c("trawl_id", "scientific_name", "common_name", "weight", "ageing_lab", "oto_id", "length_cm", "width_cm", "sex", "age")], !is.na(length_cm)), relationship = "many-to-many") %>%
-    filter(performance == "Satisfactory")
+  dat = dplyr::left_join(filter(bio[,c("trawl_id", "year", "scientific_name", "common_name", "weight", "ageing_lab", "length_cm", "width_cm", "sex", "age")], !is.na(length_cm)), 
+                         catch[,c("trawl_id","common_name", "subsample_count","area_swept_ha","longitude_dd", "latitude_dd","subsample_wt_kg","total_catch_numbers","total_catch_wt_kg","cpue_kg_km2")],
+                         relationship = "many-to-many")
+
   
   # filter out species of interest from joined (catch/haul/bio) dataset
   dat_sub = dplyr::filter(dat, common_name == spc)
@@ -197,16 +199,16 @@ length_expand_nwfsc <- function(spc, sci_name) {
     warning("species not present in data")
   }
   
-  #Add column counting number of length observations per catch
-  dat_sub$is_length <- ifelse(!is.na(dat_sub$length_cm), 1,0) 
-  dat_sub <- group_by(dat_sub, trawl_id) %>% mutate(nlength=sum(is_length)) %>% ungroup()
-  dat_sub$trawl_id <- as.numeric(dat_sub$trawl_id)
-  
   # fit length-weight regression by year to predict fish weights that have lengths only.
   # note a rank-deficiency warning may indicate there is insufficient data for some year/sex combinations (likely for unsexed group)
   #Create one set of data with only year/survey combinations with at least some weight data:
  
   if(nrow(dat_sub)>0) {
+    #Add column counting number of length observations per catch
+    dat_sub$is_length <- ifelse(!is.na(dat_sub$length_cm), 1,0) 
+    dat_sub <- group_by(dat_sub, trawl_id) %>% mutate(nlength=sum(is_length)) %>% ungroup()
+    dat_sub$trawl_id <- as.numeric(dat_sub$trawl_id)
+    
    fitted <-  filter(dat_sub, !is.na(length_cm)) %>%
     group_by(year) %>%
     mutate(sum = sum(weight, na.rm=T)) %>%
@@ -299,13 +301,13 @@ length_expand_nwfsc <- function(spc, sci_name) {
   # add hauls with zero catch back in
   absent = filter(dat_sub, cpue_kg_km2 == 0)
   trawlids <- unique(absent$trawl_id)
-  absent.df <- data.frame(trawl_id = trawlids,
-                          p1 = 0,
-                          p2 = 0,
-                          p3 = 0,
-                          p4 = 0)
-  
-  all_hauls <- rbind(p, absent.df)
+#  absent.df <- data.frame(trawl_id = trawlids,
+                    #      p1 = 0,
+                     #     p2 = 0,
+                     #     p3 = 0,
+                     #     p4 = 0)
+  all_hauls <- p
+ # all_hauls <- rbind(p, absent.df)
   all_hauls$trawl_id <- as.numeric(all_hauls$trawl_id)
   dat_sub$median_weight <- median(dat_sub$weight, na.rm=T)
   nlengths <- unique(dat_sub[,c("trawl_id","nlength", "median_weight")])
@@ -344,6 +346,7 @@ length_expand_nwfsc <- function(spc, sci_name) {
   }
   }
   if(nrow(dat_sub)==0){
+    
     return(warning("species not present in data"))
   }
   }
@@ -667,7 +670,7 @@ load_data_afsc <- function(sci_name, spc, dat.by.size, length=T) {
     dat$project <- dat$survey
     dat$event_id <- dat$trawl_id
     dat$date <- as.POSIXct(as.Date(dat$start_time, format = "%Y-%b-%d"))
-    dat <- dplyr::select(dat, event_id, common_name, scientific_name, project, year, date, bottom_temperature_c, longitude_dd, latitude_dd, longitude, latitude, cpue_kg_km2,
+    dat <- dplyr::select(dat, event_id, common_name, scientific_name, project, survey, year, date, bottom_temperature_c, longitude_dd, latitude_dd, longitude, latitude, cpue_kg_km2,
                          depth_m, julian_day, nlength, median_weight, haul_weight, p1, p2, p3, p4)
     
     
@@ -950,6 +953,7 @@ load_data_bc <- function(sci_name,dat.by.size, length=T, spc) {
   dat$common_name <- spc
   dat$depth <- dat$depth_m
   dat$depth_m <- NULL
+  dat$survey <- "dfo"
   
   #convert oxygen mg/L to umol_kg
   SA = gsw_SA_from_SP(dat$salinity_psu,dat$depth,dat$longitude,dat$latitude) #absolute salinity for pot T calc
@@ -1170,6 +1174,7 @@ IPHC <- function (catch, adjustment) {
   
   #Add columns to match the NOAA and BC data
   dat$project <- "iphc"
+  dat$survey <- "iphc"
   dat$common_name <- "pacific halibut"
   dat$scientific_name <- "hippoglossus stenolepis"
   
@@ -1278,6 +1283,7 @@ dat.by.size <- try(length_expand_bc(sci_name))
 gc()
 if(is.data.frame(dat.by.size)){
 dat3 <- try(load_data_bc(sci_name = sci_name, spc=spc, dat.by.size = dat.by.size, length=F))
+dat3 <- try(unique(dat3))
 }
 gc()
 rm(dat.by.size)
@@ -1286,14 +1292,29 @@ dat.by.size <- try(length_expand_nwfsc(spc=spc, sci_name=sci_name))
 gc()
 if(is.data.frame(dat.by.size)){
 dat2 <- try(load_data_nwfsc(spc= spc, sci_name=sci_name, dat.by.size = dat.by.size, length=F))
+dat2 <- try(unique(dat2))
+}
+
+if(!is.data.frame(dat.by.size)){
+catch <- readRDS("data/fish_raw/NOAA/nwfsc_catch.rds")
+names(catch) <- tolower(names(catch))
+catch$common_name <- tolower(catch$common_name)
+catch <- dplyr::filter(catch, common_name == spc)
+if(length(catch)>0){
+  dat.by.size <- NA
+dat2 <- try(load_data_nwfsc(spc= spc, sci_name=sci_name, dat.by.size = dat.by.size, length=F))
+dat2 <- try(unique(dat2))
+}
 }
 
 gc()
 rm(dat.by.size)
+
 dat.by.size <- try(length_expand_afsc(sci_name))
 gc()
 if(is.data.frame(dat.by.size)){
 dat5 <- try(load_data_afsc(sci_name = sci_name, spc=spc, dat.by.size = dat.by.size, length=F))
+dat5 <- try(unique(dat5))
 }
 
 gc()
@@ -1418,9 +1439,13 @@ dat$jday_scaled <- scale(dat$julian_day)
 dat$jday_scaled2 <- with(dat, jday_scaled ^ 2)
 dat$cpue_kg_km2_sub <- dat$cpue_kg_km2 * (dat$p2+dat$p3)
 dat$cpue_kg_km2_sub <- ifelse(dat$cpue_kg_km2==0, 0, dat$cpue_kg_km2_sub)
+dat$p1 <- ifelse(dat$cpue_kg_km2==0, 0, dat$p1)
+dat$p2 <- ifelse(dat$cpue_kg_km2==0, 0, dat$p2)
+dat$p3 <- ifelse(dat$cpue_kg_km2==0, 0, dat$p3)
+dat$p4 <- ifelse(dat$cpue_kg_km2==0, 0, dat$p4)
 }
 
-#Make broader region for BC
+#If doing in situ and not GLORYS or ROMS
 if(GLORYS==F & ROMS==F){
   dat <- dat4
 }
@@ -1430,9 +1455,9 @@ if(GLORYS==F & ROMS==F){
 #Isolate just NWFSC and EBS/NBS/GOA data for joining
 insitu <- filter(insitu, survey!="iphc")
 insitu <- filter(insitu, survey!="dfo")
-dat6 <- filter(dat4, project=="EBS"|project=="NBS"|project=="NWFSC.Combo"|project=="GOA")
+dat6 <- filter(dat4, survey=="EBS"|survey=="NBS"|survey=="nwfsc"|survey=="GOA")
 #Just columns of interest
-dat6 <- left_join(dat6[,c("event_id", "date", "year", "project", "latitude", "longitude", "depth", "X", "Y", "cpue_kg_km2", "julian_day", "nlength", "median_weight", "haul_weight", "pass", "p1", "p2", "p3", "p4", "common_name", "scientific_name", "depth", "vessel", "tow", "bottom_temperature_c")], insitu, by=c("date", "latitude", "longitude"))
+dat6 <- left_join(dat6[,c("event_id", "date", "year", "project","survey", "latitude", "longitude", "depth", "X", "Y", "cpue_kg_km2", "julian_day", "nlength", "median_weight", "haul_weight", "pass", "p1", "p2", "p3", "p4", "common_name", "scientific_name", "depth", "vessel", "tow", "bottom_temperature_c")], insitu, by=c("date", "latitude", "longitude"))
 #Edit columns
 dat6$event_id <- dat6$event_id.x
 dat6$event_id.x <- NULL
@@ -1443,7 +1468,6 @@ dat6$year.x <- NULL
 dat6$depth <- dat6$depth.x
 dat6$depth.x <- NULL
 dat6$depth.y <- NULL
-dat6$survey <- NULL
 dat6$X <- dat6$X.x
 dat6$Y <- dat6$Y.x
 dat6$X.x <- NULL
@@ -1453,6 +1477,9 @@ dat6$Y.y <- NULL
 dat6$depth.1 <- NULL
 dat6$month <- NULL
 dat6$doy <- NULL
+dat6$survey <- dat6$survey.x
+dat6$survey.x <- NULL
+dat6$survey.y <- NULL
 
 #Recombine back with DFO data
 if(exists("dat3")){
@@ -1477,9 +1504,12 @@ if(spc=="pacific halibut"){
 
 
 #Some other columns
-dat$survey<- ifelse(str_detect(dat$project, "SYN"), "dfo", dat$project)
 dat$cpue_kg_km2_sub <- dat$cpue_kg_km2 * (dat$p2+dat$p3)
 dat$cpue_kg_km2_sub <- ifelse(dat$cpue_kg_km2==0, 0, dat$cpue_kg_km2_sub)
+dat$p1 <- ifelse(dat$cpue_kg_km2==0, 0, dat$p1)
+dat$p2 <- ifelse(dat$cpue_kg_km2==0, 0, dat$p2)
+dat$p3 <- ifelse(dat$cpue_kg_km2==0, 0, dat$p3)
+dat$p4 <- ifelse(dat$cpue_kg_km2==0, 0, dat$p4)
 dat$log_depth_scaled <- scale(log(dat$depth))
 dat$log_depth_scaled2 <- with(dat, log_depth_scaled ^ 2)
 
