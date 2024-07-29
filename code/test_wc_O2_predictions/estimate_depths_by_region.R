@@ -1,3 +1,9 @@
+install.packages("marmap")
+library(marmap)
+library(sf)
+library(dplyr)
+library(sdmTMB)
+
 # playground code for creating grids, extract data for UW west coast only
 dat <- readRDS("data/processed_data/all_o2_dat.rds")
 
@@ -65,7 +71,7 @@ s_vancouver_island <- list(latrange = range(newdepth$latitude),
                            depth_model = depth_model_1)
 
 ############################################################
-# N vancouver island to mid Chichagof
+# N vancouver island to mid Chicago
 minlat_region = 50.95
 maxlat_region = 57.45
 # get trawl data in this region
@@ -103,7 +109,7 @@ depth_model_2 <- sdmTMB(formula = log(noaadepth) ~ 1,
                         family = gaussian(),
                         spatial = "on",
                         anisotropy = TRUE)
-# save bc and s. alasak
+# save bc and s. alaska
 
 bc_s_ak <- list(latrange = range(newdepth$latitude),
                            lonrange = range(newdepth$longitude),
