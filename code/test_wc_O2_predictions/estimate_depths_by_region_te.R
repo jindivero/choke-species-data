@@ -3,8 +3,9 @@ library(sf)
 library(dplyr)
 library(ggplot2)
 library(mapview)
+library(devtools)
+install_github("James-Thorson-NOAA/FishStatsUtils")
 library(FishStatsUtils)
-
 
 #### Oxygen data--get regions
 dat <- readRDS("data/processed_data/all_o2_dat.rds")
@@ -17,16 +18,14 @@ lonrange <- range(dat_noiphc$longitude)
 
 # get noaa bathymetry data
 noaa_depths <- getNOAA.bathy(lon1 = lonrange[1], 
-                             lon2 = -117,
+                             lon2 = lonrange[2],
                              lat1 = latrange[1], 
-                             lat2 = 32, 
+                             lat2 = latrange[2], 
                              resolution = 4, 
                              keep = TRUE)
 depths_sp <- as.SpatialGridDataFrame(noaa_depths)
 depths_sf <- st_as_sf(depths_sp, crs = st_crs(4326))
 depths_sf <- dplyr::filter(depths_sf, layer <0)
-
-
 
 ###Assign a column to label data in each region
 ##california current
@@ -53,7 +52,6 @@ data("northern_bering_sea_grid")
 nbs <- as.data.frame(northern_bering_sea_grid)
 nbs$region <- "nbs"
 
-
 ##Combine back together
 surveys <- bind_rows(cc, bc, goa, ebs, nbs)
 
@@ -63,7 +61,7 @@ surveys <- dplyr::rename(surveys, longitude = Lon, latitude = Lat)
 
 ####Create a convex hull polygon for region using the oxygen data
 #Separate just columns of interest
-polygons_grid <- surveys[,c("longitude", "latitude", "region")]
+polygons_grid <- as.data.frame(surveys[,c("longitude", "latitude", "region")])
 #Coordinate system
 surveys.sf <- polygons_grid %>%
   st_as_sf( coords = c( "longitude", "latitude" ), crs = 4326 )
@@ -116,7 +114,6 @@ cut_survey <- function(x){
 #Run this function for each set of polygons (the o2 and the catch ones)--this creates a list of the clipped sf data
 bathymetry_regions_sf <- lapply(surveys.hull, cut_survey)
 
-
 ##Convert these sf lists to dataframes and clean up
 #Get max depth in surveys for filtering the bathymetry data
 wcbts <- filter(dat_noiphc, survey=="nwfsc")
@@ -143,39 +140,32 @@ sf_to_dataframe <- function(x){
 #Run function on each region for each of the two sets of polygons
 bath_surveys<- lapply(bathymetry_regions_sf, sf_to_dataframe)
 
-
 #Save lists of dataframes
-saveRDS(bath_surveys, file="data/processed_data/bathymetry_surveys_from_o2.rds")
-saveRDS(bath_surveys2, file="data/processed_data/bathymetry_surveys_from_catch.rds")
+saveRDS(bath_surveys, file="data/processed_data/bathymetry_surveys_from_grids.rds")
 
 #Separate out the dataframes for plotting
 bath_bc <- bath_surveys[["bc"]]
-bath_ca <- bath_surveys[["ca_current"]]
+bath_ca <- bath_surveys[["ca"]]
 bath_goa <- bath_surveys[["goa"]]
-bath_bs <- bath_surveys[["bs"]]
-
-#bath_bc2 <- bath_surveys2[["dfo"]]
-#bath_ca2 <- bath_surveys2[["nwfsc"]]
-#bath_goa2 <- bath_surveys2[["GOA"]]
-#bath_bs2 <- bath_surveys2[["bs"]]
+bath_ebs <- bath_surveys[["ebs"]]
+bath_nbs <- bath_surveys[["nbs"]]
 
 #check
 mapview::mapview(bath_bc)
 mapview::mapview(bath_ca)
 mapview::mapview(bath_goa)
-mapview::mapview(bath_bs)
-
-mapview::mapview(bath_bc2)
-mapview::mapview(bath_ca2)
-mapview::mapview(bath_goa2)
-mapview::mapview(bath_bs2)
+mapview::mapview(bath_ebs)
+mapview::mapview(bath_nbs)
 
 #Re-combine into one dataframe with columns for region for more plotting
-bath_bc2$region <- "bc"
-bath_ca2$region <- "ca_current"
-bath_goa2$region <- "goa"
-bath_bs2$region <- "bs"
-bath_all <- bind_rows(bath_bc2, bath_ca2, bath_goa2, bath_bs2)
+bath_bc$region <- "bc"
+bath_ca$region <- "ca"
+bath_goa$region <- "goa"
+bath_ebs$region <- "ebs"
+bath_nbs$region <- "nbs"
+bath_all <- bind_rows(bath_bc, bath_ca, bath_goa, bath_ebs, bath_nbs)
+
+saveRDS(bath_all, file="data/processed_data/bathymetry_surveys_dataframe.rds")
 
 ggplot(bath_all, aes(x=longitude, y=latitude))+geom_point(aes(colour=region), size=0.2)
 
