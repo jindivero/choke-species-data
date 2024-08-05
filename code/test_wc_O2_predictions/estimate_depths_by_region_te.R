@@ -15,9 +15,12 @@ dat_noiphc <- dplyr::filter(dat, !survey == "iphc") # because this crosses over 
 latrange <- range(dat_noiphc$latitude)
 lonrange <- range(dat_noiphc$longitude)
 
+latrange <- range(dat$latitude)
+lonrange <- range(dat$longitude)
+
 # get noaa bathymetry data
 noaa_depths <- getNOAA.bathy(lon1 = -180, 
-                             lon2 = lonrange[2],
+                             lon2 = 180,
                              lat1 = latrange[1], 
                              lat2 = latrange[2], 
                              resolution = 4, 
@@ -138,17 +141,25 @@ mapview::mapview(bath_goa)
 mapview::mapview(bath_ebs)
 mapview::mapview(bath_ai)
 
-
 #Re-combine into one dataframe with columns for region for more plotting
 bath_bc$region <- "bc"
 bath_cc$region <- "cc"
 bath_goa$region <- "goa"
 bath_ebs$region <- "ebs"
 bath_ai$region <- "ai"
-bath_all <- bind_rows(bath_bc, bath_cc, bath_goa, bath_ebs, bath_ai)
+bath_all <- as.data.frame(bind_rows(bath_bc, bath_cc, bath_goa, bath_ebs, bath_ai))
 
 saveRDS(bath_all, file="data/processed_data/bathymetry_regions_dataframe.rds")
 
 ggplot(bath_all, aes(x=longitude, y=latitude))+geom_point(aes(colour=region), size=0.2)
 
 mapview(bath_all, zcol="region", cex=1, lwd=0.1)
+
+#Do the Aleutian Islands work with longitude spanning W and E?
+library(sdmTMB)
+
+bath_ai<- as.data.frame(bath_ai)
+mesh <- make_mesh(bath_ai, xy_cols = c("X", "Y"), n_knots=250)
+plot(mesh)
+ggplot(test, aes(x=X, y=Y))+geom_point(aes(colour=longitude))
+

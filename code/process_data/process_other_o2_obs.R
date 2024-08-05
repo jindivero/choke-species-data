@@ -733,4 +733,4 @@ hake <- hake %>% group_by(longitude, latitude, date) %>%
 
 #Save
 setwd(basewd)
-saveRDS("data/processed_data/hake_oxygen_processed.rds")
+saveRDS(hake, "data/processed_data/hake_oxygen_processed.rds")
