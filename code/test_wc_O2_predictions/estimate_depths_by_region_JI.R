@@ -53,7 +53,6 @@ surveys <- bind_rows(ca_current, bc, goa, bs)
 nrow(dat_noiphc)
 nrow(surveys) #few extra in here--some might have gotten included in two regions, which should be fine for polygon creating but need to check for modeling
 test <- anti_join(dat_noiphc, surveys) #None were missed
-test2 <- surveys[duplicated(surveys),] #Some duplicated, but not in two regions--this looks like it's catching observations in both CODAP and WCOA
 
 ####Create a convex hull polygon for region using the oxygen data
 #Separate just columns of interest
