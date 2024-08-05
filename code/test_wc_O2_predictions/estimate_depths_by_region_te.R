@@ -161,5 +161,5 @@ library(sdmTMB)
 bath_ai<- as.data.frame(bath_ai)
 mesh <- make_mesh(bath_ai, xy_cols = c("X", "Y"), n_knots=250)
 plot(mesh)
-ggplot(test, aes(x=X, y=Y))+geom_point(aes(colour=longitude))
+ggplot(bath_ai, aes(x=X, y=Y))+geom_point(aes(colour=longitude))
 
