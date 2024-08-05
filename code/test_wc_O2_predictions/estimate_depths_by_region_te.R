@@ -80,6 +80,8 @@ regions.hull <- regions.sf %>%
   summarise( geometry = st_combine( geometry ) ) %>%
   st_convex_hull()
 
+# save
+write_rds(x = regions.hull, file = "data/processed_data/regions_hull.rds")
 #Check
 mapview::mapview(regions.hull)
 
