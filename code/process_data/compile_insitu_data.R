@@ -81,7 +81,7 @@ iphc <-  read_excel("~/Dropbox/choke species/code/choke-species-data/data/fish_r
 colnames(iphc) <- tolower(colnames(iphc))
 
 #Columns of interest
-iphc <- iphc[,c("year", "date", "beginlat", "beginlon", "begindepth (fm)", "temp c", "salinity psu", "oxygen_ml")]
+iphc <- iphc[,c("year", "date", "profiler lat", "profiler lon", "profiler bottom depth (m)", "temp c", "salinity psu", "oxygen_ml")]
 colnames(iphc) <- c("year", "date", "latitude", "longitude", "depth", "temperature_C", "salinity_psu", "do_mlpL")
 
 #Date and month in correct format
@@ -104,6 +104,7 @@ iphc$sigma0_kgm3 = gsw_sigma0(SA,CT)
 iphc$O2_umolkg = iphc$do_mlpL*44660/(iphc$sigma0_kgm3+1000) 
 
 #Convert coordinates
+iphc <- subset(iphc, !is.na(latitude))
 iphc <- iphc %>%
   st_as_sf(coords=c('longitude','latitude'),crs=4326,remove = F) %>%  
   st_transform(crs = "+proj=utm +zone=10 +datum=WGS84 +units=km") %>% 

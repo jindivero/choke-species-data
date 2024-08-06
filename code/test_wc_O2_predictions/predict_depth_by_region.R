@@ -99,6 +99,7 @@ ggplot(dat_predict2, aes(x=noaadepth, y=exp(est)))+
   ylab("Predicted Depth (m)")+
   xlab("Actual Depth (m)")
 
+dat_predict2$resid <- log(dat_predict2$noaadepth) - dat_predict2$est
 ggplot(dat_predict2, aes(x=X, y=Y))+
   geom_point(aes(colour=resid), size=0.3)+
   facet_wrap("region", scales="free")+
