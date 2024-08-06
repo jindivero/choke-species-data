@@ -1190,6 +1190,7 @@ IPHC <- function (catch, adjustment) {
   dat$doy <- as.POSIXlt(dat$date, format = "%Y-%b-%d")$yday
   dat$year <- as.numeric(dat$year)
   dat$day <- NULL
+  dat$depth <- dat$depth*1.8288
   
   
   #convert oxygen mg/L to umol_kg
