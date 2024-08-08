@@ -2,7 +2,7 @@ library(FishStatsUtils)
 library(concaveman)
 library(marmap)
 library(tidyverse)
-
+library(sf)
 
 # get all noaa bathymetry data within data range
 # playground code for creating grids, extract data for UW west coast only
@@ -23,6 +23,15 @@ noaa_depths <- getNOAA.bathy(lon1 = lonrange[1],
 depths_sp <- as.SpatialGridDataFrame(noaa_depths)
 depths_sf <- st_as_sf(depths_sp, crs = st_crs(4326))
 
+# create a dataframe of noaa bathymetry
+tmp <- st_coordinates(depths_sf)
+depthlist <- -depths_sf$layer
+newdepth <- tibble(longitude = tmp[,1],
+                   latitude = tmp[,2],
+                   noaadepth = depthlist)
+newdepth_sf <- st_as_sf(newdepth, coords = c("longitude", "latitude"), crs = st_crs(4326))
+
+
 # Go by region, first US CC
 
 data("california_current_grid")
@@ -37,7 +46,7 @@ grid.2.use_sf <- st_as_sf(grid.2.use, coords = c("lon", "lat"), crs = st_crs(432
 
 # create polygon covering extent of grid
 poly <- st_convex_hull(st_union(grid.2.use_sf))
-depths_in_region <- st_filter(depths_sf,poly)
+depths_in_region <- st_filter(newdepth_sf,poly)
 
 # not working, showing only 11 depths within the polygon.   Need help from group!
 

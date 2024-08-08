@@ -11,7 +11,9 @@ filenames <- c("data/processed_data/insitu_combined.rds",
                "data/processed_data/wcoa_processed.rds",
                "data/processed_data/codap_processed.rds",
                "data/processed_data/ocnms2_processed.rds",
-               "data/processed_data/ocnms_processed.rds"
+               "data/processed_data/ocnms_processed.rds",
+               "data/processed_data/ocnms_processed.rds",
+               "data/processed_data/hake_oxygen_processed.rds"
                )
 simplify_df <- function(input_dat, makedoy = F) {
   # see if DOY is present, if not, add it
@@ -32,6 +34,8 @@ simplify_df <- function(input_dat, makedoy = F) {
 for (i in 1:length(filenames)) {
   df_tmp <- readRDS(filenames[i])
   df_tmp <- simplify_df(df_tmp)
+  # remove depth with error codes -999
+  df_tmp <- dplyr::filter(df_tmp, !depth == -999)
   if (i==1) dat <- df_tmp
   if (i>1) dat <- rbind(dat, df_tmp)
 }

@@ -155,13 +155,3 @@ saveRDS(bath_all, file="data/processed_data/bathymetry_regions_dataframe.rds")
 
 ggplot(bath_all, aes(x=longitude, y=latitude))+geom_point(aes(colour=region), size=0.2)
 
-mapview(bath_all, zcol="region", cex=1, lwd=0.1)
-
-#Do the Aleutian Islands work with longitude spanning W and E?
-library(sdmTMB)
-
-bath_ai<- as.data.frame(bath_ai)
-mesh <- make_mesh(bath_ai, xy_cols = c("X", "Y"), n_knots=250)
-plot(mesh)
-ggplot(bath_ai, aes(x=X, y=Y))+geom_point(aes(colour=longitude))
-
