@@ -70,7 +70,12 @@ trawl_dat$type <- "synoptic"
 dat_predict <- bind_rows(trawl_dat, ctd_dat)
 
 ##Plot
-ggplot(dat_predict, aes(x=depth, y=exp(est)))+geom_point(aes(colour=survey))+geom_abline()+facet_wrap("survey")
+ggplot(dat_predict, aes(x=log(depth), y=est))+
+  geom_point(aes(colour=survey))+
+  geom_abline()+
+  facet_wrap("survey", scales="free")+
+  xlab("Log(depth) Reported")+
+  ylab("Log(depth) Estimated")
 
 ##Predict back to the bathymetry data
 for (i in 1:length(region_list)) {
@@ -92,12 +97,13 @@ for (i in 1:length(region_list)) {
 }
 
 #Plot
-ggplot(dat_predict2, aes(x=noaadepth, y=exp(est)))+
+ggplot(dat_predict2, aes(x=log(noaadepth), y=est))+
   geom_point(aes(colour=region))+
   geom_abline()+
-  facet_wrap("region")+
-  ylab("Predicted Depth (m)")+
-  xlab("Actual Depth (m)")
+  facet_wrap("region", scales="free")+
+  xlab("Log(depth) NOAA Bathymetry Depth")+
+  ylab("Log(depth) Model Estimate")+
+  theme(legend.position=c(0.75,0.2))
 
 dat_predict2$resid <- log(dat_predict2$noaadepth) - dat_predict2$est
 ggplot(dat_predict2, aes(x=X, y=Y))+
@@ -108,12 +114,12 @@ ggplot(dat_predict2, aes(x=X, y=Y))+
   scale_colour_distiller(palette = "RdBu")
 
 #RMSE
-rmse <- rmse(dat_predict2$noaadepth, exp(dat_predict2$est))
+rmse <- rmse(log(dat_predict2$noaadepth), dat_predict2$est)
 
 #Per region
 rmse_survey <- dat_predict2 %>%
   group_by(region) %>%
-  summarise(rmse = rmse(noaadepth, exp(est)))
+  summarise(rmse = rmse(log(noaadepth), est))
 
 
 ####Back to predictions#####
@@ -121,63 +127,153 @@ rmse_survey <- dat_predict2 %>%
 dat_predict <- filter(dat_predict, depth>0 & exp(est)<20000)
 
 #Re-plot
-ggplot(dat_predict, aes(x=depth, y=exp(est)))+
+ggplot(dat_predict, aes(x=log(depth), y=est))+
   geom_point(aes(colour=survey))+
   geom_abline()+
   facet_wrap("survey", scales="free")+
   theme(legend.position="none")+
-  ylab("Predicted Depth (m)")+
-  xlab("Actual Depth (m)")
+  xlab("Log(depth) Reported")+
+  ylab("Log(depth) Estimated")
 
 #For each region
-ggplot(dat_predict, aes(x=depth, y=exp(est)))+
+ggplot(dat_predict, aes(x=log(depth), y=est))+
   geom_point(aes(colour=survey))+
   geom_abline()+
   facet_wrap("region", scales="free")+
-  ylab("Predicted Depth (m)")+
-  xlab("Actual Depth (m)")
+  xlab("Log(depth) Reported")+
+  ylab("Log(depth) Estimated")
 
 #For each region, synoptic only
-ggplot(filter(dat_predict, type=="synoptic"), aes(x=depth, y=exp(est)))+
+ggplot(filter(dat_predict, type=="synoptic"), aes(x=log(depth), y=est))+
   geom_point(aes(colour=survey))+
   geom_abline()+
   facet_wrap("region", scales="free")+
-  ylab("Predicted Depth (m)")+
-  xlab("Actual Depth (m)")
+  xlab("Log(depth) Reported")+
+  ylab("Log(depth) Estimated")
 
-##Get the RMSE for trawl surveys in each region
-#Total
-rmse <- rmse(dat_predict$depth, exp(dat_predict$est))
 
-##RMSE
+####RMSE
+rmse <- rmse(log(dat_predict$depth, dat_predict$est))
 dat_rmse_survey <- dat_predict %>%
   group_by(survey) %>%
-  summarise(rmse = rmse(depth, exp(est)))
+  summarise(rmse = rmse(log(depth), est))
 
 dat_rmse_region<- dat_predict %>%
   group_by(region) %>%
-  summarise(rmse = rmse(depth, exp(est)))
+  summarise(rmse = rmse(log(depth), est))
 
 #Synoptic only
 dat_rmse_region<- filter(dat_predict, type=="synoptic") %>%
   group_by(region) %>%
-  summarise(rmse = rmse(depth, exp(est)))
+  summarise(rmse = rmse(log(depth), est))
 
 dat_rmse_region<- filter(dat_predict, type=="synoptic") %>%
   group_by(region, survey) %>%
-  summarise(rmse = rmse(depth, exp(est)))
+  summarise(rmse = rmse(log(depth), est))
 dat_rmse_region <- pivot_wider(dat_rmse_region, names_from=survey, values_from=rmse)
 
-###Look more into IPHC
-#see what is going on with IPHC depths   
+####Explore rules for excluding data ####
+##Based on RMSE of observed/predicted bathymetry data
+#Distribution of RMSE of bathymetry data
+dat_predict2$rmse <- sqrt((log(dat_predict2$noaadepth) - dat_predict2$est)^2)
+rmse_sd <- sd(dat_predict2$rmse)
+nrow(filter(dat_predict2, rmse<2))/nrow(dat_predict2)
+#99% is within 2
+nrow(filter(dat_predict2, rmse<1))/nrow(dat_predict2)
+#97% is within 1
 
-#IPHC in each region
-ggplot(filter(dat_predict, survey=="iphc"), aes(x=depth, y=exp(est)))+
-  geom_point()+
+#Plot distribution
+ggplot(filter(dat_predict2, rmse<2),aes(x=rmse))+
+  geom_histogram()+
+  facet_wrap("region")+
+  geom_vline(data=rmse_survey, aes(xintercept=rmse), linetype="dotted")+
+  geom_vline(data=rmse_survey, aes(xintercept=rmse*2), linetype="dashed")
+
+ggplot(filter(dat_predict2, rmse<2),aes(x=rmse))+
+  geom_density(aes(colour=survey))+
+  facet_wrap("region")+
+  geom_vline(data=rmse_survey, aes(xintercept=rmse), linetype="dotted")+
+  geom_vline(data=rmse_survey, aes(xintercept=rmse*2), linetype="dashed")
+
+
+##Of predictions
+#Calculate root squared error of each prediction
+dat_predict$rmse2 <- sqrt((log(dat_predict$depth) - dat_predict$est)^2)
+#Combine RMSE and count to prediction data
+dat_predict <- left_join(dat_predict, rmse_survey, by="region")
+dat_predict <- left_join(dat_predict, n, by="region")
+#Is the RSE below or above the RMSE of each region's bathymetry data?
+dat_predict$limit <- ifelse(dat_predict$rmse2<rmse, 1, 0)
+dat_predict$limit2 <- ifelse(dat_predict$rmse2<(rmse*2), 1, 0)
+dat_predict$limit3 <- dat_predict$limit+dat_predict$limit2
+
+#Proportion of observations below the mean RMSE:
+region_included<- dat_predict %>%
+  group_by(region) %>%
+summarise(inc=sum(limit))
+
+#Number of observations in each region
+n <- count(dat_predict, region)
+region_included$n <- n$n
+region_included$prop <- region_included$inc/region_included$n
+
+#Proportion of observations below 2* RMSE
+region_included2<- dat_predict %>%
+  group_by(region) %>%
+  summarize(inc=sum(limit2))
+region_included2$n <- n$n
+region_included2$prop <- region_included2$inc/region_included2$n
+
+#Visualize distribution
+ggplot(filter(dat_predict, rmse2<2),aes(x=rmse2))+
+  geom_density(aes(colour=survey))+
+  facet_wrap("region")+
+  geom_vline(data=rmse_survey, aes(xintercept=rmse), linetype="dotted")+
+  geom_vline(data=rmse_survey, aes(xintercept=rmse*2), linetype="dashed")+
+  xlab("Root-Squared Error of Reported Depth vs NOAA Bathymetry Model Estimated Depth")
+
+ggplot(dat_predict, aes(x=log(depth), y=est))+
+  geom_point(aes(colour=as.factor(limit3)))+
+  geom_abline()+
+  facet_wrap("survey", scales="free")+
+  xlab("Log(depth) Reported")+
+  ylab("Log(depth) Estimated")+
+  theme(legend.position=c(0.9,0.15))+
+  labs(colour="")+
+  scale_colour_discrete(labels=c("Outside 2 RMSE", "Within 1 RMSE", "Within 2 RMSE"))
+
+
+
+
+
+
+#Add RMSE buffer of bathymetry data to plot
+ggplot(dat_predict, aes(x=log(depth), y=est))+
+  geom_point(aes(colour=as.factor(limit3)))+
+  geom_abline(data=rmse_survey, aes(slope=1, intercept=rmse), linetype="dotted")+
+  geom_abline(data=rmse_survey, aes(slope=1, intercept=-rmse), linetype="dotted")+
+  geom_abline(data=rmse_survey, aes(slope=1, intercept=(rmse*2)), linetype="dashed")+
+  geom_abline(data=rmse_survey, aes(slope=1, intercept=(-rmse*2)), linetype="dashed")+
   geom_abline()+
   facet_wrap("region", scales="free")+
-  ylab("Predicted Depth (m)")+
-  xlab("Actual Depth (m)")
+  xlab("Log(depth) Reported")+
+  ylab("Log(depth) Estimated")+
+  xlim(0,10)+
+  ylim(0,10)
+
+ggplot(filter(dat_predict, limit2==1), aes(x=log(depth), y=est))+
+  geom_point(aes(colour=survey))+
+  geom_abline(data=rmse_survey, aes(slope=1, intercept=rmse), linetype="dotted")+
+  geom_abline(data=rmse_survey, aes(slope=1, intercept=-rmse), linetype="dotted")+
+  geom_abline(data=rmse_survey, aes(slope=1, intercept=(rmse*2)), linetype="dashed")+
+  geom_abline(data=rmse_survey, aes(slope=1, intercept=(-rmse*2)), linetype="dashed")+
+  geom_abline()+
+  facet_wrap("region", scales="free")+
+  xlab("Log(depth) Reported")+
+  ylab("Log(depth) Estimated")+
+  xlim(0,10)+
+  ylim(0,10)
+
 
 ###Tim's code for plotting residuals--work on looping through each region
 
