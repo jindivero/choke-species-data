@@ -66,7 +66,7 @@ CT = gsw_CT_from_t(SA,nwfsc2$temperature_C,nwfsc2$depth) #conservative temp
 nwfsc2$sigma0_kgm3 = gsw_sigma0(SA,CT)
 nwfsc2$O2_umolkg = nwfsc2$do_mlpL*44660/(nwfsc2$sigma0_kgm3+1000) 
 
-#Convert coordiantes
+#Convert coordinates
 nwfsc2 <- nwfsc2 %>%
   st_as_sf(coords=c('longitude','latitude'),crs=4326,remove = F) %>%  
   st_transform(crs = "+proj=utm +zone=10 +datum=WGS84 +units=km") %>% 
@@ -74,6 +74,46 @@ nwfsc2 <- nwfsc2 %>%
 
 #Add survey column
 nwfsc2$survey <- "nwfsc"
+
+#WCBTS 2022-2023
+nwfsc3 <- read.csv("data/oxygen options/wcbts_2022_2023.csv")
+#Catch data to get metadata
+dat <- readRDS("data/fish_raw/NOAA/nwfsc_catch.rds")
+names(dat) = tolower(names(dat))
+#Columns of interest
+dat <- dat[,c("year", "depth_m", "longitude_dd", "latitude_dd", "date", "trawl_id")]
+dat <- unique(dat)
+dat$trawl_id <- as.numeric(dat$trawl_id)
+#Combine
+nwfsc3 <- left_join(nwfsc3, dat, by="trawl_id")
+nwfsc3$year.x <- NULL
+
+#Column names
+colnames(nwfsc3) <- c("do_mlpL","salinity_psu", "temperature_C", "event_id", "year", "depth", "longitude", "latitude", "date")
+
+#Convert nwfsc3e to correct format
+nwfsc3$date <- as.POSIXct(as.Date(as.POSIXct("1970-01-01")+as.difftime(nwfsc3$date,units="days")))
+
+#convert oxygen mg/L to umol_kg
+SA = gsw_SA_from_SP(nwfsc3$salinity_psu,nwfsc3$depth,nwfsc3$longitude,nwfsc3$latitude) #absolute salinity for pot T calc
+pt = gsw_pt_from_t(SA,nwfsc3$temperature_C,nwfsc3$depth) #potential temp at a particular depth
+CT = gsw_CT_from_t(SA,nwfsc3$temperature_C,nwfsc3$depth) #conservative temp
+nwfsc3$sigma0_kgm3 = gsw_sigma0(SA,CT)
+nwfsc3$O2_umolkg = nwfsc3$do_mlpL*44660/(nwfsc3$sigma0_kgm3+1000) 
+
+#Convert coordinates
+nwfsc3 <- filter(nwfsc3, !is.na(latitude))
+nwfsc3 <- nwfsc3 %>%
+  st_as_sf(coords=c('longitude','latitude'),crs=4326,remove = F) %>%  
+  st_transform(crs = "+proj=utm +zone=10 +nwfsc3um=WGS84 +units=km") %>% 
+  mutate(X=st_coordinates(.)[,1],Y=st_coordinates(.)[,2]) 
+
+#Add survey column
+nwfsc3$survey <- "nwfsc"
+
+#Month
+nwfsc3$month <- month(nwfsc3$date)
+
 
 #IPHC data
 #iphc <-  read_excel("~/Dropbox/choke species/code/choke-species-data/data/fish_raw/IPHC/IPHC_FISS_set_halibut.xlsx")
@@ -221,10 +261,11 @@ afsc2$survey <- "EBS"
 afsc <- as.data.frame(afsc)
 iphc <- as.data.frame(iphc)
 nwfsc2 <- as.data.frame(nwfsc2)
+nwfsc3 <- as.data.frame(nwfsc3)
 dfo <- as.data.frame(dfo)
 goa <- as.data.frame(goa)
 afsc2 <- as.data.frame(afsc2)
-insitu_combined <- bind_rows(dfo, nwfsc2, iphc, goa, afsc, afsc2)
+insitu_combined <- bind_rows(dfo, nwfsc2, nwfsc3, iphc, goa, afsc, afsc2)
 
 insitu_combined$date <-as.POSIXct(as.Date(insitu_combined$date),format = "%Y-%b-%d")
 insitu_combined$doy <-  as.POSIXlt(insitu_combined$date, format = "%Y-%b-%d")$yday
