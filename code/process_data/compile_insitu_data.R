@@ -257,6 +257,41 @@ afsc2 <- afsc2 %>%
 #Add survey column
 afsc2$survey <- "EBS"
 
+#Aleutian Islands
+ai <- read.csv("data/oxygen options/OceanAI2014.csv")
+ai2 <- read.csv("data/oxygen options/OceanAI2016.csv")
+
+#Combine
+ai <- bind_rows(ai, ai2)
+colnames(ai) <- tolower(colnames(ai))
+
+#Join with haul info to get other info (event id and haul)
+ai <- left_join(ai, haul)
+
+ai <- ai[,c("hauljoin","latitude", "longitude","temp", "salinity", "o2", "depth", "start_time")]
+colnames(ai) <- c("event_id", "latitude", "longitude", "temperature_C", "salinity_psu", "O2_umolkg","depth", "date")
+
+#Date and month in right format
+ai$date <- as.POSIXct(as.Date(ai$date),format = "%Y-%b-%d")
+ai$month <- month(ai$date)
+ai$year <- year(ai$date)
+
+#convert oxygen ppm to umol_kg
+SA = gsw_SA_from_SP(ai$salinity_psu,ai$depth,ai$longitude,ai$latitude) #absolute salinity for pot T calc
+pt = gsw_pt_from_t(SA,ai$temperature_C,ai$depth) #potential temp at a particular depth
+CT = gsw_CT_from_t(SA,ai$temperature_C,ai$depth) #conservative temp
+ai$sigma0_kgm3 = gsw_sigma0(SA,CT)
+
+#Convert coordinates
+#Remove with missing coordinates
+ai <- ai %>%
+  st_as_sf(coords=c('longitude','latitude'),crs=4326,remove = F) %>%  
+  st_transform(crs = "+proj=utm +zone=10 +datum=WGS84 +units=km") %>% 
+  mutate(X=st_coordinates(.)[,1],Y=st_coordinates(.)[,2]) 
+
+#Add survey column
+ai$survey <- "ai"
+
 #Bind all together
 afsc <- as.data.frame(afsc)
 iphc <- as.data.frame(iphc)
@@ -265,7 +300,8 @@ nwfsc3 <- as.data.frame(nwfsc3)
 dfo <- as.data.frame(dfo)
 goa <- as.data.frame(goa)
 afsc2 <- as.data.frame(afsc2)
-insitu_combined <- bind_rows(dfo, nwfsc2, nwfsc3, iphc, goa, afsc, afsc2)
+ai <- as.data.frame(ai)
+insitu_combined <- bind_rows(dfo, nwfsc2, nwfsc3, iphc, goa, afsc, afsc2, ai)
 
 insitu_combined$date <-as.POSIXct(as.Date(insitu_combined$date),format = "%Y-%b-%d")
 insitu_combined$doy <-  as.POSIXlt(insitu_combined$date, format = "%Y-%b-%d")$yday

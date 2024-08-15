@@ -1,0 +1,189 @@
+library(sdmTMB)
+library(dplyr)
+library(Metrics)
+library(ggplot2)
+library(tidyr)
+library(rnaturalearth)
+
+#Load functions
+source("code/util_funs.R")
+source("code/test_wc_O2_predictions/helper_funs.R")
+
+### Set ggplot themes ###
+theme_set(theme_bw(base_size = 15))
+theme_update(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+
+#Load oxygen data
+dat <- as.data.frame(readRDS("data/processed_data/all_o2_dat_filtered.rds"))
+
+#Log depth
+dat$depth_ln <- log(dat$depth)
+
+#Save model outputs?
+savemodel=F
+#Plot models and save?
+plotmodel = F
+
+#test removing OCNMS
+dat <- filter(dat, survey!="ocnms")
+
+#Function to fit model for a specific region
+fit_models <- function(dat, test_region, plot_title){
+  ##Set up data
+  #Filter to region
+  dat.2.use <- as.data.frame(filter(dat, region==test_region))
+  #Just trawl survey data
+  trawl_dat <- dat.2.use %>%
+    filter(survey %in% c("nwfsc", "dfo", "goa", "EBS", "iphc"))
+  #Years in trawl data available
+  yearlist <- sort(unique(trawl_dat$year))
+  
+  #Create lists and matrices for storing RMSE and list for storing prediction datasets
+  rmse_summary <- matrix(data=NA, nrow=length(yearlist), ncol=5)
+  colnames(rmse_summary) <- c("persistent", "persistent_year", "spatiotemporal", "n_test","n_train")
+  output <- list()
+ # rsqlist <- rmselist <- rep(NA, length(yearlist))
+  ##Fit model for each year of training data
+for (i in 1:length(yearlist)) {
+  #Separate test and training data
+  test_year <- yearlist[i]
+  print(test_year)
+  test_data <- dat.2.use %>%
+    filter(survey %in% c("nwfsc", "dfo", "goa", "EBS", "iphc") & year==test_year)
+  train_data <- dat.2.use %>%
+    filter(!((survey %in% c("nwfsc", "dfo", "goa", "EBS", "iphc") & year==test_year)))
+  train_data <- as.data.frame(train_data)
+  test_data <- as.data.frame(test_data)
+  #Determine if extra time is needed
+  extra_years <- setdiff(yearlist, unique(train_data$year))
+  if(length(extra_years)==0) {extra_years = NULL}   
+  ## Make Mesh and fit model ####
+  spde <- make_mesh(data = train_data,
+                    xy_cols = c("X", "Y"),
+                    cutoff = 45)
+  print("fitting m1")
+  m1 <- try(sdmTMB(
+    formula = o2  ~ 1+s(depth_ln) + s(doy),
+    mesh = spde,
+    data = train_data,
+    family = gaussian(),
+    spatial = "on",
+    spatiotemporal  = "off"
+  ))
+  print("fitting m2")
+  if(length(extra_years)>0) {
+    train_data <- train_data %>% add_row(year=extra_years, depth_ln=mean(train_data$depth_ln), 
+                                         survey=test_region, doy=mean(train_data$doy), temp=mean(train_data$temp),
+                                         o2=mean(train_data$o2), sigma0=mean(train_data$sigma0),X=mean(train_data$X),
+                                         Y=mean(train_data$Y))
+    train_data <- as.data.frame(train_data)
+    spde <- make_mesh(data = train_data,
+                      xy_cols = c("X", "Y"),
+                      cutoff = 45)
+  }   
+  m2 <- try(sdmTMB(
+    formula = o2  ~ 1+as.factor(year)+s(sigma0) + s(temp) +  s(depth_ln) + s(doy),
+    mesh = spde,
+    data = train_data,
+    family = gaussian(),
+    spatial = "on",
+    spatiotemporal  = "off",
+    extra_time=c(extra_years)
+  ))
+  print("fitting m3")
+  if(length(extra_years)>0) {
+    train_data <- dat.2.use %>%
+      filter(!((survey %in% c("nwfsc", "dfo", "goa", "EBS", "iphc") & year==test_year)))
+    train_data <- as.data.frame(train_data)
+    spde <- make_mesh(data = train_data,
+                      xy_cols = c("X", "Y"),
+                      cutoff = 45)
+  }   
+  m3 <- try(sdmTMB(
+    formula = o2  ~ 1+ s(sigma0) + s(temp) +  s(depth_ln) + s(doy),
+    mesh = spde,
+    data = train_data,
+    family = gaussian(),
+    time = "year",
+    spatial = "on",
+    spatiotemporal  = "IID",
+    extra_time=c(extra_years)
+  ))
+
+  models <- list(m1,m2,m3)
+  tmp.preds <- list()
+  #Predict data from each model and calculate RMSE
+  for (j in 1:length(models)){
+    # Predict onto data
+    test_predict_O2 <- try(predict(models[[j]], newdata = test_data))
+    test_predict_O2$residual = try(test_predict_O2$o2 - (test_predict_O2$est))
+    rmse_summary[i,j] <- try(rmse(test_predict_O2$o2, test_predict_O2$est), silent=T)
+    tmp.preds[[i]] <- test_predict_O2
+    #Number of datapoints in each year for calculating overall RMSE late
+    if(j==1){
+      rmse_summary[i,4] <- nrow(test_data)
+      rmse_summary[i,5] <- nrow(train_data)
+    }
+  
+  tmp.output <- list(test_data, tmp.preds, models)
+  names(tmp.output) <-c("test_data", "predictions", "models")
+  output[[i]] <- tmp.output
+  }
+}
+  
+  #Clean RMSE table
+  rmse_summary <- as.data.frame(rmse_summary)
+  rmse_summary$year <- yearlist
+  rmse_summary$persistent <- as.numeric(rmse_summary$persistent)
+  rmse_summary$persistent_year <- as.numeric(rmse_summary$persistent_year)
+  rmse_summary$spatiotemporal <- as.numeric(rmse_summary$spatiotemporal)
+  
+  ##Save models
+  if (savemodel) {
+    save(x = output, file = paste("code/test_wc_O2_predictions/outputs/o2_models_", test_region, ".Rdata", sep=""))
+  }
+
+  #Plot RMSE and save
+  rmse_long <- pivot_longer(rmse_summary, 1:3, names_to="model")
+  ggplot(rmse_long, aes(x=year, y=value))+
+    geom_col(aes(fill=model), position="dodge")+
+    ylab("RMSE")+
+    ggtitle(paste(plot_title))+
+    xlab("Year")+
+    theme(legend.position="top")
+  ggsave(paste("code/test_wc_O2_predictions/outputs/", plot_title, "_rmse_plot.pdf", sep=""))
+  
+  #Calculate overall RMSE
+  rmse_total <- as.data.frame(sapply(rmse_summary[,1:3], calc_rmse, rmse_summary$n_test))
+  colnames(rmse_total) <- "rmse_total"
+  print(rmse_total)
+  
+  #Save
+  saveRDS(rmse_summary, file=paste("code/test_wc_O2_predictions/outputs/rmse_years_", test_region, ".rds", sep=""))
+  saveRDS(rmse_total, file=paste("code/test_wc_O2_predictions/outputs/rmse_total_", test_region, ".rds", sep=""))
+ 
+ #Return RMSE table
+  return(rmse_summary)
+}
+
+#Apply to region
+rmse_cc <- fit_models(dat, test_region="cc", "California Current")
+rmse_bc <- fit_models(dat, "bc", "British Columbia")
+rmse_goa <- fit_models(dat, "goa", "Gulf of Alaska")
+rmse_ebs <- fit_models(dat, "ebs", "Eastern Bering Sea")
+rmse_ai <- fit_models(dat, "ai", "Aleutian Islands")
+
+d##Plot spatial residuals
+# setup up mapping ####
+map_data <- rnaturalearth::ne_countries(scale = "large",
+                                        returnclass = "sf",
+                                        continent = "North America")
+
+us_coast_proj <- sf::st_transform(map_data, crs = 32610)
+
+
+if(plotmodel){
+  if(is.data.frame(test_predict_O2)){
+    plot_predict2(test_predict_O2, model_names[j], test_year, us_coast_proj)
+  }
+}
