@@ -16,6 +16,9 @@ theme_update(panel.grid.major = element_blank(), panel.grid.minor = element_blan
 #Load oxygen data
 dat <- as.data.frame(readRDS("data/processed_data/all_o2_dat_filtered.rds"))
 
+dat <- dat %>%
+  drop_na(depth, o2, temp, sigma0, doy, X, Y)
+
 #Log depth
 dat$depth_ln <- log(dat$depth)
 
@@ -23,15 +26,20 @@ dat$depth_ln <- log(dat$depth)
 savemodel=F
 #Plot models and save?
 plotmodel = F
+#Remove OCNMS?
+ocnms =F
 
 #test removing OCNMS
+if(ocnms){
 dat <- filter(dat, survey!="ocnms")
+}
 
 #Function to fit model for a specific region
 fit_models <- function(dat, test_region, plot_title){
   ##Set up data
   #Filter to region
   dat.2.use <- as.data.frame(filter(dat, region==test_region))
+  if(test_region=="goa") {dat.2.use <- filter(dat.2.use, !(survey=="ai"))}
   #Just trawl survey data
   trawl_dat <- dat.2.use %>%
     filter(survey %in% c("nwfsc", "dfo", "goa", "EBS", "iphc"))
@@ -72,7 +80,7 @@ for (i in 1:length(yearlist)) {
   ))
   print("fitting m2")
   if(length(extra_years)>0) {
-    train_data <- train_data %>% add_row(year=extra_years, depth_ln=mean(train_data$depth_ln), 
+    train_data <- train_data %>% add_row(year=extra_years, depth_ln=mean(train_data$depth_ln),
                                          survey=test_region, doy=mean(train_data$doy), temp=mean(train_data$temp),
                                          o2=mean(train_data$o2), sigma0=mean(train_data$sigma0),X=mean(train_data$X),
                                          Y=mean(train_data$Y))
@@ -80,7 +88,7 @@ for (i in 1:length(yearlist)) {
     spde <- make_mesh(data = train_data,
                       xy_cols = c("X", "Y"),
                       cutoff = 45)
-  }   
+  }
   m2 <- try(sdmTMB(
     formula = o2  ~ 1+as.factor(year)+s(sigma0) + s(temp) +  s(depth_ln) + s(doy),
     mesh = spde,
@@ -100,7 +108,7 @@ for (i in 1:length(yearlist)) {
                       cutoff = 45)
   }   
   m3 <- try(sdmTMB(
-    formula = o2  ~ 1+ s(sigma0) + s(temp) +  s(depth_ln) + s(doy),
+    formula = o2  ~ 1+s(sigma0) + s(temp) +  s(depth_ln) + s(doy),
     mesh = spde,
     data = train_data,
     family = gaussian(),
@@ -173,7 +181,20 @@ rmse_goa <- fit_models(dat, "goa", "Gulf of Alaska")
 rmse_ebs <- fit_models(dat, "ebs", "Eastern Bering Sea")
 rmse_ai <- fit_models(dat, "ai", "Aleutian Islands")
 
-d##Plot spatial residuals
+##Combine overall RMSE of each region into a single table
+#Read files
+rmse_total_cc <- readRDS("~/Dropbox/choke species/code/choke-species-data/code/test_wc_O2_predictions/outputs/rmse_total_cc.rds")
+rmse_total_bc <- readRDS("~/Dropbox/choke species/code/choke-species-data/code/test_wc_O2_predictions/outputs/rmse_total_bc.rds")
+rmse_total_goa <- readRDS("~/Dropbox/choke species/code/choke-species-data/code/test_wc_O2_predictions/outputs/rmse_total_goa.rds")
+rmse_total_ebs <- readRDS("~/Dropbox/choke species/code/choke-species-data/code/test_wc_O2_predictions/outputs/rmse_total_ebs.rds")
+rmse_total_ai <- readRDS("~/Dropbox/choke species/code/choke-species-data/code/test_wc_O2_predictions/outputs/rmse_total_ai.rds")
+
+#Combine
+rmse_totals <- bind_cols(rmse_total_cc, rmse_total_bc, rmse_total_goa, rmse_total_ebs, rmse_total_ai)
+colnames(rmse_totals) <- c("cc", "bc", "goa", "ebs", "ai")
+#Pivo
+
+##Plot spatial residuals
 # setup up mapping ####
 map_data <- rnaturalearth::ne_countries(scale = "large",
                                         returnclass = "sf",
