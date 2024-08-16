@@ -148,6 +148,7 @@ plot_predict <- function(test_predict_O2, test_year, us_coast_proj) {
 calc_rmse <- function(rmse_list, n){
   rmse2 <- as.data.frame(rmse_list)
   rmse2$n <- n
+  rmse2 <- filter(rmse2, n>50)
   rmse2$rmse2 <- rmse2$rmse_list ^ 2
   rmse2$xminusxbarsq <- rmse2$n * rmse2$rmse2
   rmse2 <- drop_na(rmse2, xminusxbarsq)
@@ -155,11 +156,11 @@ calc_rmse <- function(rmse_list, n){
   return(rmse_total)
 }
 
-plot_predict2 <- function(test_predict_O2, test_year, model_name, us_coast_proj) {
+plot_predict_simple <- function(test_predict_O2, test_year, model_name) {
   # Plot ####
   xmin <- min(test_predict_O2$X)*1.5
-  xlimits = c(282853, 1025581)
-  ylimits = c(3549000, 5366000)
+  xlimits = c((min(test_predict_O2$X)*1.5*1000), (max(test_predict_O2$X)*1.5*1000))
+  ylimits = c((min(test_predict_O2$Y)*1.5*1000), (max(test_predict_O2$Y)*1.5*1000))
   
   data_plot <- ggplot(us_coast_proj) + geom_sf() +
     geom_point(
@@ -304,4 +305,25 @@ plot_predict2 <- function(test_predict_O2, test_year, model_name, us_coast_proj)
     geom_abline(intercept = 0, slope = 1) +
     theme(legend.position = "none")
   return(grid.arrange(pred_vs_actual, resid_vs_pred, ncol = 2))
+}
+
+
+
+##still working on this
+#function to pull evaluation plots for just one region, model, year
+plot_problem_child <- function(region, year, model){
+  #Read in output from a region
+  load("~/Dropbox/choke species/code/choke-species-data/code/test_wc_O2_predictions/outputs/o2_models_ebs.RData")
+  
+  test <- output[[2]]
+  ##1) Plot test data
+  data <- test[[1]]
+  ggplot(data, aes(x=X, y=Y))+geom_point(aes(shape=survey, colour=o2))
+  
+  ##1) Plot observations versus predictions
+  pred <- test[[2]][[1]]
+  pred2 <- test[[2]][[1]]
+  pred3 <- test[[2]][[1]]
+  ggplot()
+  
 }

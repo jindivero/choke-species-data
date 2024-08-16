@@ -4,6 +4,7 @@ library(Metrics)
 library(ggplot2)
 library(tidyr)
 library(rnaturalearth)
+library(sf)
 
 #Load functions
 source("code/util_funs.R")
@@ -13,17 +14,30 @@ source("code/test_wc_O2_predictions/helper_funs.R")
 theme_set(theme_bw(base_size = 15))
 theme_update(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
 
+# setup up mapping ####
+map_data <- rnaturalearth::ne_countries(scale = "large",
+                                        returnclass = "sf",
+                                        continent = "North America")
+
+us_coast_proj <- sf::st_transform(map_data, crs = 32610)
+
 #Load oxygen data
 dat <- as.data.frame(readRDS("data/processed_data/all_o2_dat_filtered.rds"))
 
+#Remove any rows with missing data
 dat <- dat %>%
   drop_na(depth, o2, temp, sigma0, doy, X, Y)
+
+#Remove oxygen outliers
+dat <- filter(dat, o2<1500)
+#Minimum salinity
+dat <- filter(dat, sigma0>=24)
 
 #Log depth
 dat$depth_ln <- log(dat$depth)
 
 #Save model outputs?
-savemodel=F
+savemodel=T
 #Plot models and save?
 plotmodel = F
 #Remove OCNMS?
@@ -78,6 +92,17 @@ for (i in 1:length(yearlist)) {
     spatial = "on",
     spatiotemporal  = "off"
   ))
+  if(!is.list(m1)){
+    print("fitting m1 no intercept")
+    m1 <- try(sdmTMB(
+      formula = o2  ~ 0+s(depth_ln) + s(doy),
+      mesh = spde,
+      data = train_data,
+      family = gaussian(),
+      spatial = "on",
+      spatiotemporal  = "off"
+    ))
+  }
   print("fitting m2")
   if(length(extra_years)>0) {
     train_data <- train_data %>% add_row(year=extra_years, depth_ln=mean(train_data$depth_ln),
@@ -98,6 +123,18 @@ for (i in 1:length(yearlist)) {
     spatiotemporal  = "off",
     extra_time=c(extra_years)
   ))
+  if(!is.list(m2)){
+    print("fitting m2 no intercept")
+    m2 <- try(sdmTMB(
+      formula = o2  ~ 0+as.factor(year)+s(sigma0) + s(temp) +  s(depth_ln) + s(doy),
+      mesh = spde,
+      data = train_data,
+      family = gaussian(),
+      spatial = "on",
+      spatiotemporal  = "off",
+      extra_time=c(extra_years)
+    ))
+  }
   print("fitting m3")
   if(length(extra_years)>0) {
     train_data <- dat.2.use %>%
@@ -117,7 +154,18 @@ for (i in 1:length(yearlist)) {
     spatiotemporal  = "IID",
     extra_time=c(extra_years)
   ))
-
+  if(!is.list(m3)){
+    print("fitting m3 no intercept")
+   m3 <- try(sdmTMB(
+      formula = o2  ~ 0+s(sigma0) + s(temp) +  s(depth_ln) + s(doy),
+      mesh = spde,
+      data = train_data,
+      family = gaussian(),
+      spatial = "on",
+      spatiotemporal  = "off",
+      extra_time=c(extra_years)
+    ))
+  }
   models <- list(m1,m2,m3)
   tmp.preds <- list()
   #Predict data from each model and calculate RMSE
@@ -126,7 +174,7 @@ for (i in 1:length(yearlist)) {
     test_predict_O2 <- try(predict(models[[j]], newdata = test_data))
     test_predict_O2$residual = try(test_predict_O2$o2 - (test_predict_O2$est))
     rmse_summary[i,j] <- try(rmse(test_predict_O2$o2, test_predict_O2$est), silent=T)
-    tmp.preds[[i]] <- test_predict_O2
+    tmp.preds[[j]] <- test_predict_O2
     #Number of datapoints in each year for calculating overall RMSE late
     if(j==1){
       rmse_summary[i,4] <- nrow(test_data)
@@ -192,19 +240,3 @@ rmse_total_ai <- readRDS("~/Dropbox/choke species/code/choke-species-data/code/t
 #Combine
 rmse_totals <- bind_cols(rmse_total_cc, rmse_total_bc, rmse_total_goa, rmse_total_ebs, rmse_total_ai)
 colnames(rmse_totals) <- c("cc", "bc", "goa", "ebs", "ai")
-#Pivo
-
-##Plot spatial residuals
-# setup up mapping ####
-map_data <- rnaturalearth::ne_countries(scale = "large",
-                                        returnclass = "sf",
-                                        continent = "North America")
-
-us_coast_proj <- sf::st_transform(map_data, crs = 32610)
-
-
-if(plotmodel){
-  if(is.data.frame(test_predict_O2)){
-    plot_predict2(test_predict_O2, model_names[j], test_year, us_coast_proj)
-  }
-}
