@@ -250,14 +250,14 @@ rmse_ai <- fit_models(dat, "ai", "Aleutian Islands")
 
 ##Combine overall RMSE of each region into a single table
 #Read files
-rmse_total_cc <- readRDS("~/Dropbox/choke species/code/choke-species-data/code/test_wc_O2_predictions/outputs/rmse_total_cc.rds")
-rmse_total_bc <- readRDS("~/Dropbox/choke species/code/choke-species-data/code/test_wc_O2_predictions/outputs/rmse_total_bc.rds")
-rmse_total_goa <- readRDS("~/Dropbox/choke species/code/choke-species-data/code/test_wc_O2_predictions/outputs/rmse_total_goa.rds")
-rmse_total_ebs <- readRDS("~/Dropbox/choke species/code/choke-species-data/code/test_wc_O2_predictions/outputs/rmse_total_ebs.rds")
-rmse_total_ai <- readRDS("~/Dropbox/choke species/code/choke-species-data/code/test_wc_O2_predictions/outputs/rmse_total_ai.rds")
+rmse_total_cc <- readRDS("code/test_wc_O2_predictions/outputs/rmse_total_cc.rds")
+rmse_total_bc <- readRDS("code/choke-species-data/code/test_wc_O2_predictions/outputs/rmse_total_bc.rds")
+rmse_total_goa <- readRDS("code/choke-species-data/code/test_wc_O2_predictions/outputs/rmse_total_goa.rds")
+rmse_total_ebs <- readRDS("code/choke-species-data/code/test_wc_O2_predictions/outputs/rmse_total_ebs.rds")
+rmse_total_ai <- readRDS("code/choke-species-data/code/test_wc_O2_predictions/outputs/rmse_total_ai.rds")
 
 #Combine
 rmse_totals <- bind_cols(rmse_total_cc, rmse_total_bc, rmse_total_goa, rmse_total_ebs, rmse_total_ai)
 colnames(rmse_totals) <- c("cc", "bc", "goa", "ebs", "ai")
 
-#Plot models
+saveRDS(rmse_totals, file="rmse_total_combined.rds")

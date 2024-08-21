@@ -375,6 +375,138 @@ plot_simple <- function(output, dat.2.use){
   return(figure)
 }
 
+plot_glorys <- function(preds, dat.2.use){
+  #Separate test and training data, predictions, and models from output list
+  #Set latitude and longitude
+  xlims <- c(min(dat.2.use$X)*1000, max(dat.2.use$X)*1000)
+  ylims <- c(min(dat.2.use$Y)*1000, max(dat.2.use$Y)*1000)
+  lats <- c(round(min(dat.2.use$latitude)),  round(max(dat.2.use$latitude)))
+  lons <- c(round(min(dat.2.use$longitude)+2), round(max(dat.2.use$longitude)))
+  
+    try(pred_plot <-  ggplot(us_coast_proj) + geom_sf() +
+          geom_point(preds, mapping=aes(x=X*1000, y=Y*1000, col=o2),
+                     size = 1.0,
+                     alpha = 1.0
+          ) +
+          ylim(ylims)+
+          scale_x_continuous(breaks=lons, limits=xlims)+
+          scale_colour_viridis_c(
+            limits = c(0, 200),
+            oob = scales::squish,
+            name = bquote(O[2]~Predictions),
+            breaks = c(0, 100, 200)
+          ) +
+          labs(x = "Longitude", y = "Latitude") +
+          theme_bw() +
+          theme(
+            panel.grid.major = element_blank()
+            ,
+            panel.grid.minor = element_blank()
+            ,
+            panel.border = element_blank()
+            ,
+            strip.background = element_blank()
+            ,
+            strip.text = element_blank()
+          ) +
+          theme(axis.line = element_line(color = "black")) +
+          theme(axis.text = element_text(size = 11)) +
+          theme(axis.title = element_text(size = 12)) +
+          theme(legend.text = element_text(size = 11)) +
+          theme(legend.position = "bottom") +
+          guides(colour = guide_colourbar(title.position = "top", title.hjust =
+                                            0.5)))
+    
+    try(resid_plot <-  ggplot(us_coast_proj) + geom_sf() +
+          geom_point(preds, mapping=aes(x=X*1000, y=Y*1000, col=residual),
+                     size = 1.0,
+                     alpha = 1.0
+          ) +
+          scale_colour_distiller(palette = "RdBu", limits = c(-50, 50)) +
+          ylim(ylims)+
+          scale_x_continuous(breaks=lons, limits=xlims)+
+          #, limits = c(-40, 40), oob = scales::squish, name = bquote(O[2]), breaks = c(-40, 0, 40)) +
+          labs(x = "Longitude", y = "Latitude") +
+          theme_bw() +
+          theme(
+            panel.grid.major = element_blank()
+            ,
+            panel.grid.minor = element_blank()
+            ,
+            panel.border = element_blank()
+            ,
+            strip.background = element_blank()
+            ,
+            strip.text = element_blank()
+          ) +
+          theme(axis.line = element_line(color = "black")) +
+          theme(axis.text = element_text(size = 11)) +
+          theme(axis.title = element_text(size = 12)) +
+          theme(legend.text = element_text(size = 11)) +
+          theme(legend.position = "bottom") +
+          guides(colour = guide_colourbar(title.position = "top", title.hjust =
+                                            0.5)))
+    
+    try(pred_obs <- ggplot(data = test_predict_O2, aes(x = o2, y = est, col = latitude)) +
+          geom_point() +
+          scale_colour_distiller(
+            # limits = c(31, 50),
+            #oob = scales::squish,
+            name = "latitude",
+            palette="Greys"
+            # breaks = c(35, 40, 45)
+          ) +
+          theme(legend.position = "bottom") +
+          theme_bw() +
+          theme(
+            panel.grid.major = element_blank()
+            ,
+            panel.grid.minor = element_blank()
+            ,
+            panel.border = element_blank()
+            ,
+            strip.background = element_blank()
+            ,
+            strip.text = element_blank()
+          ) +
+          theme(axis.line = element_line(color = "black")) +
+          theme(axis.text = element_text(size = 11)) +
+          theme(axis.title = element_text(size = 12)) +
+          theme(legend.text = element_text(size = 11)) +
+          labs(x = "Observed", y = "Predicted") +
+          geom_abline(intercept = 0, slope = 1)+
+          theme(legend.position="bottom"))
+  # plot residuals vs. prediction
+  #  resid_vs_pred <- ggplot(data = test_predict_O2, aes(x = (est), y = residual, col = Y)) +
+  # geom_point() +
+  #scale_colour_viridis_c(
+  #  limits = c(31, 50),
+  #  oob = scales::squish,
+  #  name = "latitude",
+  #  breaks = c(35, 40, 45)
+  # ) +
+  # ggtitle(test_year) +
+  # labs(x = "Predicted", y = "Residual") +
+  # theme(legend.position = "none")
+  
+  figure <- ggarrange(pred_plot, resid_plot, pred_obs, ncol=3, nrow=1, legend="none", labels=c("A", "B", "C"))
+  annotate_figure(figure, top=paste(test_year), fig.lab.size=18, fig.lab.face="bold")
+  
+  ggsave(
+    paste("code/test_wc_O2_predictions/outputs/plots/", test_region, "/glorys_", test_year, ".pdf", sep=""),
+    plot = last_plot(),
+    device = NULL,
+    path = NULL,
+    scale = 1,
+    width = 8.5,
+    height = 11,
+    units = c("in"),
+    dpi = 600,
+    limitsize = TRUE
+  )
+  return(figure)
+}
+
 ##Function to plot marginal effects of spatio-temporal model
 plot_marginal_effects <- function(models,preds, dat.2.use, i){
   m <- try(models[[i]])
@@ -476,6 +608,44 @@ plot_marginal_effects <- function(models,preds, dat.2.use, i){
   }
 }
 
+#Convert GLORYS from .nc format 
+convert_glorys <- function(file_name, do_threshold) {
+  nc <- tidync(file_name)
+  nc_df <- nc %>%
+    hyper_tibble %>%
+    group_by(longitude, latitude) %>%
+    filter(depth == max(depth)) %>%
+    ungroup() 
+  # replace DO below threshold with the threshold level
+  nc_df <- nc_df %>%
+    mutate(o2 = case_when(
+      o2 < do_threshold ~ do_threshold,
+      TRUE ~ o2  # Keep other values unchanged
+    ))
+  
+  # remove large list from memory
+  rm(nc)
+  nc_df$time <- round(nc_df$time)
+  days <- unique(nc_df$time)
+  n_days <- length(days)
+  first_day <- days[1]
+  last_day <- days[n_days]
+  days.2.use <- seq(first_day, last_day, by = 10)
+  nc_df <- nc_df %>%
+    filter(time %in% days.2.use)
+  nc_df$time <- (as_datetime("1950-01-01")+hours(nc_df$time))
+  nc_df <- nc_df %>%
+    st_as_sf(coords=c('longitude','latitude'),crs=4326,remove = F) %>%  
+    st_transform(crs = "+proj=utm +zone=10 +datum=WGS84 +units=km") %>% 
+    mutate(X=st_coordinates(.)[,1],Y=st_coordinates(.)[,2]) %>% 
+    st_set_geometry(NULL)
+  nc_df$doy <- as.POSIXlt(nc_df$time, format = "%Y-%b-%d")$yday
+  nc_df$year <- year(nc_df$time)
+  nc_df$month <- month(nc_df$time)
+  return(nc_df)
+}
+
+
 ##still working on this
 #function to pull evaluation plots for just one region, model, year
 plot_one <- function(region, year, model){
@@ -493,3 +663,5 @@ plot_one <- function(region, year, model){
   pred3 <- test[[2]][[1]]
   ggplot()
 }
+
+
