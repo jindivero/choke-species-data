@@ -1,12 +1,10 @@
-
+# packages that might not be installed - install any not already installed
+packages <- c("devtools", "rfisbase", "gsw")
+install.packages(setdiff(packages, rownames(installed.packages())))  
 library(dplyr)
-install.packages("devtools")
 library(devtools)
-install_github("ropensci/taxize")
 library(taxize)
-install.packages("rfishbase")
 library(rfishbase)
-install.packages("gsw")
 library(gsw)
 library(readxl)
 library(stringr)

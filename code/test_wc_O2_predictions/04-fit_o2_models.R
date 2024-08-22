@@ -47,8 +47,10 @@ fit_models <- function(dat, test_region, plot_title){
   yearlist <- sort(unique(trawl_dat$year))
   
   #Create lists and matrices for storing RMSE and list for storing prediction datasets
-  rmse_summary <- matrix(data=NA, nrow=length(yearlist), ncol=5)
-  colnames(rmse_summary) <- c("persistent", "persistent_year", "spatiotemporal", "n_test","n_train")
+  models.2.use <- 4
+  other.cols <- 2
+  rmse_summary <- matrix(data=NA, nrow=length(yearlist), ncol=models.2.use + other.cols)
+  colnames(rmse_summary) <- c("persistent_spatial", "persistent_spatial_year", "year_temp_salinity", "temp_salinity_spatiotemporal", "n_test","n_train")
   output <- list()
  # rsqlist <- rmselist <- rep(NA, length(yearlist))
   ##Fit model for each year of training data
@@ -90,6 +92,17 @@ for (i in 1:length(yearlist)) {
                       cutoff = 45)
   }
   m2 <- try(sdmTMB(
+    formula = o2  ~ 1+as.factor(year) + s(depth_ln) + s(doy),
+    mesh = spde,
+    data = train_data,
+    family = gaussian(),
+    spatial = "on",
+    spatiotemporal  = "off",
+    extra_time=c(extra_years)
+  ))
+  
+  print("fitting m3")
+  m3 <- try(sdmTMB(
     formula = o2  ~ 1+as.factor(year)+s(sigma0) + s(temp) +  s(depth_ln) + s(doy),
     mesh = spde,
     data = train_data,
@@ -98,7 +111,8 @@ for (i in 1:length(yearlist)) {
     spatiotemporal  = "off",
     extra_time=c(extra_years)
   ))
-  print("fitting m3")
+  
+  print("fitting m4")
   if(length(extra_years)>0) {
     train_data <- dat.2.use %>%
       filter(!((survey %in% c("nwfsc", "dfo", "goa", "EBS", "iphc") & year==test_year)))
@@ -107,7 +121,7 @@ for (i in 1:length(yearlist)) {
                       xy_cols = c("X", "Y"),
                       cutoff = 45)
   }   
-  m3 <- try(sdmTMB(
+  m4 <- try(sdmTMB(
     formula = o2  ~ 1+s(sigma0) + s(temp) +  s(depth_ln) + s(doy),
     mesh = spde,
     data = train_data,
@@ -118,7 +132,7 @@ for (i in 1:length(yearlist)) {
     extra_time=c(extra_years)
   ))
 
-  models <- list(m1,m2,m3)
+  models <- list(m1,m2,m3, m4)
   tmp.preds <- list()
   #Predict data from each model and calculate RMSE
   for (j in 1:length(models)){
@@ -129,8 +143,9 @@ for (i in 1:length(yearlist)) {
     tmp.preds[[i]] <- test_predict_O2
     #Number of datapoints in each year for calculating overall RMSE late
     if(j==1){
-      rmse_summary[i,4] <- nrow(test_data)
-      rmse_summary[i,5] <- nrow(train_data)
+      ncols <- ncol(rmse_summary)
+      rmse_summary[i,ncols -2] <- nrow(test_data)
+      rmse_summary[i,ncols - 1] <- nrow(train_data)
     }
   
   tmp.output <- list(test_data, tmp.preds, models)
@@ -142,9 +157,10 @@ for (i in 1:length(yearlist)) {
   #Clean RMSE table
   rmse_summary <- as.data.frame(rmse_summary)
   rmse_summary$year <- yearlist
-  rmse_summary$persistent <- as.numeric(rmse_summary$persistent)
-  rmse_summary$persistent_year <- as.numeric(rmse_summary$persistent_year)
-  rmse_summary$spatiotemporal <- as.numeric(rmse_summary$spatiotemporal)
+  rmse_summary$persistent_spatial <- as.numeric(rmse_summary$persistent_spatial)
+  rmse_summary$persistent_spatial_year <- as.numeric(rmse_summary$persistent_spatial_year)
+  rmse_summary$year_temp_salinity <- as.numeric(rmse_summary$year_temp_salinity)
+  rmse_summary$temp_salinity_spatiotemporal <- as.numeric(rmse_summary$temp_salinity_spatiotemporal)
   
   ##Save models
   if (savemodel) {
@@ -152,7 +168,7 @@ for (i in 1:length(yearlist)) {
   }
 
   #Plot RMSE and save
-  rmse_long <- pivot_longer(rmse_summary, 1:3, names_to="model")
+  rmse_long <- pivot_longer(rmse_summary, 1:models.2.use, names_to="model")
   ggplot(rmse_long, aes(x=year, y=value))+
     geom_col(aes(fill=model), position="dodge")+
     ylab("RMSE")+
@@ -162,7 +178,7 @@ for (i in 1:length(yearlist)) {
   ggsave(paste("code/test_wc_O2_predictions/outputs/", plot_title, "_rmse_plot.pdf", sep=""))
   
   #Calculate overall RMSE
-  rmse_total <- as.data.frame(sapply(rmse_summary[,1:3], calc_rmse, rmse_summary$n_test))
+  rmse_total <- as.data.frame(sapply(rmse_summary[,1:models.2.use], calc_rmse, rmse_summary$n_test))
   colnames(rmse_total) <- "rmse_total"
   print(rmse_total)
   
@@ -175,6 +191,8 @@ for (i in 1:length(yearlist)) {
 }
 
 #Apply to region
+
+test_dat <- dplyr::filter(dat, year %in% 2011:2013)
 rmse_cc <- fit_models(dat, test_region="cc", "California Current")
 rmse_bc <- fit_models(dat, "bc", "British Columbia")
 rmse_goa <- fit_models(dat, "goa", "Gulf of Alaska")
@@ -183,11 +201,11 @@ rmse_ai <- fit_models(dat, "ai", "Aleutian Islands")
 
 ##Combine overall RMSE of each region into a single table
 #Read files
-rmse_total_cc <- readRDS("~/Dropbox/choke species/code/choke-species-data/code/test_wc_O2_predictions/outputs/rmse_total_cc.rds")
-rmse_total_bc <- readRDS("~/Dropbox/choke species/code/choke-species-data/code/test_wc_O2_predictions/outputs/rmse_total_bc.rds")
-rmse_total_goa <- readRDS("~/Dropbox/choke species/code/choke-species-data/code/test_wc_O2_predictions/outputs/rmse_total_goa.rds")
-rmse_total_ebs <- readRDS("~/Dropbox/choke species/code/choke-species-data/code/test_wc_O2_predictions/outputs/rmse_total_ebs.rds")
-rmse_total_ai <- readRDS("~/Dropbox/choke species/code/choke-species-data/code/test_wc_O2_predictions/outputs/rmse_total_ai.rds")
+rmse_total_cc <- readRDS("code/test_wc_O2_predictions/outputs/rmse_total_cc.rds")
+rmse_total_bc <- readRDS("code/test_wc_O2_predictions/outputs/rmse_total_bc.rds")
+rmse_total_goa <- readRDS("code/test_wc_O2_predictions/outputs/rmse_total_goa.rds")
+rmse_total_ebs <- readRDS("code/test_wc_O2_predictions/outputs/rmse_total_ebs.rds")
+rmse_total_ai <- readRDS("code/test_wc_O2_predictions/outputs/rmse_total_ai.rds")
 
 #Combine
 rmse_totals <- bind_cols(rmse_total_cc, rmse_total_bc, rmse_total_goa, rmse_total_ebs, rmse_total_ai)
