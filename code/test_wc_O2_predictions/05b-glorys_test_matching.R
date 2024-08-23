@@ -13,7 +13,7 @@ library(marmap)
 #Set base WD
 basewd <- "/Users/jindiv/Library/CloudStorage/Dropbox/choke species/code/choke-species-data"
 setwd(basewd)
-  
+
 #Load functions
 source("code/util_funs.R")
 source("code/test_wc_O2_predictions/helper_funs.R")
@@ -49,9 +49,9 @@ dat$sigma0[dat$sigma0 <= minsigma0] <- minsigma0
 dat$depth_ln <- log(dat$depth)
 
 #Save model outputs?
-savemodel=T
+savemodel=F
 #Plot models and save?
-plotmodel = T
+plotmodel = F
 #Remove OCNMS?
 ocnms =F
 #Restrict testing years to just if more than 50 observations?
@@ -60,8 +60,8 @@ n_50 =T
 #Set do threshold level for GLORYS data
 do_threshold <- 0
 
-#Filter days of GLORYS data to every 10th day?
-filter_time <- T
+#Filter time?
+filter_time <- F
 
 #Function to fit model for a specific region
 glorys_fit <- function(dat, test_region, plot_title){
@@ -79,7 +79,7 @@ glorys_fit <- function(dat, test_region, plot_title){
     counts <- filter(counts, n>50)
     yearlist <- sort(unique(counts$year))
   }
-
+  
   #Create lists and matrices for storing RMSE and list for storing prediction datasets
   rmse_summary <- matrix(data=NA, nrow=length(yearlist), ncol=2)
   colnames(rmse_summary) <- c("glorys", "n_test")
@@ -91,7 +91,7 @@ glorys_fit <- function(dat, test_region, plot_title){
     print(test_year)
     ##Trawl testing data
     test_data <- dat.2.use %>%
-        filter(survey %in% c("nwfsc", "dfo", "goa", "EBS", "iphc") & year==test_year)
+      filter(survey %in% c("nwfsc", "dfo", "goa", "EBS", "iphc") & year==test_year)
     test_data <- as.data.frame(test_data)
     ##Pull GLORYS data
     setwd(gloryswd)
@@ -99,12 +99,12 @@ glorys_fit <- function(dat, test_region, plot_title){
       files <- list.files("wc_o2", pattern=paste(test_year))
       files <- paste("wc_o2/", files, sep="")
     }
-
+    
     if(test_region=="bc"){
       files <- list.files("bc_o2", pattern=paste(test_year))
       files <- paste("bc_o2/", files, sep="")
     }
-
+    
     if(test_region=="ebs"|test_region=="goa"|test_region=="ai"){
       files <- list.files("alaska_o2_combined", pattern=paste(test_year))
       files <- paste("alaska_o2_combined/", files, sep="")
@@ -115,8 +115,8 @@ glorys_fit <- function(dat, test_region, plot_title){
     if(length(files)==1){
       glorys <- convert_glorys(files, do_threshold)
     }
-
-   #Use function to get data for all files if multiple files in year (this is mostly a thing for Alaska)
+    
+    #Use function to get data for all files if multiple files in year (this is mostly a thing for Alaska)
     if(length(files)>1){
       # get first year of glorys
       glorys <- convert_glorys(files[1], do_threshold)
@@ -126,70 +126,61 @@ glorys_fit <- function(dat, test_region, plot_title){
         glorys <- rbind(glorys, tmp_glorys)
       }
     }
+    
+    ##Pull in survey extent polygon from GLORYS data
+    # Regional polygon
+    poly <- filter(regions.hull, region==test_region)
+    #Convert GLORYS to an sf
+    glorys_sf <-  st_as_sf(glorys, coords = c("longitude", "latitude"), crs = st_crs(4326))
+    # pull out observations within each region
+    region_dat  <- st_filter(glorys_sf, poly)
+    region_dat <- as.data.frame(region_dat)
+    
+    #Log depth
+    region_dat$depth_ln <- log(region_dat$depth)
+    
+    #Set working directory back to base for saving
+    setwd(basewd)
+    
+    ##Match nearest GLORYS point
+    ##Extract out for each haul the closest matching lat and lon
+    # use nn2() to calculate min distance to nearest ROMS lat/long for each date
+    for(k in 1:1){
+    test_day <- test_data[1,]
+    doy <- unique(test_day$doy)
+    region.2.use <- filter(region_dat, doy==doy)
+    test <- RANN::nn2(region.2.use[, c('Y', 'X')], test_day[, c('Y', "X")],k = 1)
+    #Extract GLORYS point
+    test_day$est <- region.2.use[c(test$nn.idx),c("o2")]
+    test_predict_O2 <- test_day
+    }
+    
+    for(k in 2:nrow(test_data)){
+      test_day <- test_data[k,]
+      doy <- unique(test_day$doy)
+      region.2.use <- filter(region_dat, doy==doy)
+      test <- RANN::nn2(region.2.use[, c('Y', 'X')], test_day[, c('Y', "X")],k = 1)
+      #Extract GLORYS point
+      test_day$est <- region.2.use[c(test$nn.idx),c("o2")]
+      test_predict_O2 <- bind_rows(test_predict_O2, test_day)
+    }
 
-  ##Pull in survey extent polygon from GLORYS data
-  # Regional polygon
-  poly <- filter(regions.hull, region==test_region)
-  #Convert GLORYS to an sf
-  glorys_sf <-  st_as_sf(glorys, coords = c("longitude", "latitude"), crs = st_crs(4326))
-  # pull out observations within each region
-  region_dat  <- st_filter(glorys_sf, poly)
-  region_dat <- as.data.frame(region_dat)
-  
-  #Log depth
-  region_dat$depth_ln <- log(region_dat$depth)
-  
-  #Set working directory back to base for saving
-  setwd(basewd)
-  
-  #Mesh
-  spde <- make_mesh(data = region_dat,
-                    xy_cols = c("X", "Y"),
-                    cutoff = 45)
-  
-  #Fit model
-  print("fitting model")
-  m <- try(sdmTMB(formula = o2 ~ 0 +s(depth_ln) + s(doy),
-               mesh = spde,
-               data = region_dat, 
-               family = gaussian(), 
-               spatial = "on",
-               spatiotemporal  = "off"))
-  if(!is.list(m)){
-    print("fitting model no intercept")
-    m <- try(sdmTMB(formula = o2 ~ 1 +s(depth_ln) + s(doy),
-                mesh = spde,
-                data = region_dat, 
-                family = gaussian(), 
-                spatial = "on",
-                spatiotemporal  = "off"))
-  }
-  ### Predictions ###
-  #Predict
-  test_predict_O2 <- try(predict(m, newdata = test_data))
-  #Residuals
-  test_predict_O2$residual = try(test_predict_O2$o2 - (test_predict_O2$est))
-  #RMSE
-  rmse_summary[i,1] <- try(rmse(test_predict_O2$o2, test_predict_O2$est), silent=T)
-  #Number of datapoints in each year for calculating overall RMSE late
-  rmse_summary[i,2] <- nrow(test_data)
- 
-  tmp.output <- list(region_dat, test_data, test_predict_O2, m)
-  names(tmp.output) <-c("glorys_data", "test_data", "predictions", "model")
-  output[[i]] <- tmp.output
-  
-  if(plotmodel){
-    print("plotting")
-    try(plot_glorys(test_predict_O2, dat.2.use))
-  }
-  }
+    #Residuals
+    test_predict_O2$residual = test_predict_O2$o2 - test_predict_O2$est
+                                                     
+    #RMSE
+    rmse_summary[i,1] <- try(rmse(test_predict_O2$o2, test_predict_O2$est), silent=T)
+    rmse_summary[i,2] <- try(rmse(nrow(test_predict_O2)))
+    
+   output[[i]] <-test_predict_O2
+    }
   
   #Clean RMSE table
   rmse_summary <- as.data.frame(rmse_summary)
   rmse_summary$year <- yearlist
   
   ##Save models
- if (savemodel) {
+  if (savemodel) {
     save(x = output, file = paste("code/test_wc_O2_predictions/outputs/o2_models_glorys/", test_region, ".Rdata", sep=""))
   }
   
@@ -197,17 +188,18 @@ glorys_fit <- function(dat, test_region, plot_title){
   rmse_total <- as.data.frame(calc_rmse(rmse_summary$glorys, rmse_summary$n_test))
   colnames(rmse_total) <- "rmse_total"
   rownames(rmse_total) <- "glorys"
-
+  
   #Combine with synoptic table
-  file <- list.files("code/test_wc_O2_predictions/outputs", pattern=paste("rmse_years_",test_region,".rds", sep=""))
+  file <- list.files("code/test_wc_O2_predictions/outputs", pattern=paste("glorys_rmse_",test_region,".rds", sep=""))
   table <- readRDS(paste("code/test_wc_O2_predictions/outputs/", file, sep=""))
-  file2 <- list.files("code/test_wc_O2_predictions/outputs", pattern=paste("rmse_total_",test_region,".rds", sep=""))
+  file2 <- list.files("code/test_wc_O2_predictions/outputs", pattern=paste("glorys_rmsetotal_",test_region,".rds", sep=""))
   table2 <- readRDS(paste("code/test_wc_O2_predictions/outputs/", file2, sep=""))
   
-  table$glorys <- rmse_summary$glorys
+  table$glorys2 <- rmse_summary$glorys
   table2 <- bind_rows(table2,rmse_total)
   
- #Plot RMSE and save
+  if(plotmodel){
+  #Plot RMSE and save
   rmse_long <- pivot_longer(table, c(1:4,9), names_to="model")
   #Remove rows with less than n=50 in test data
   ggplot(rmse_long, aes(x=year, y=value))+
@@ -219,16 +211,15 @@ glorys_fit <- function(dat, test_region, plot_title){
     theme_set(theme_bw(base_size = 15))+
     theme_update(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
   ggsave(paste("code/test_wc_O2_predictions/outputs/glorys_", test_region, "_rmse_plot.pdf", sep=""))
-  
-  if(savemodel){
-  saveRDS(table, file=paste("code/test_wc_O2_predictions/outputs/glorys_rmse_", test_region, ".rds", sep=""))
-  saveRDS(table2, file=paste("code/test_wc_O2_predictions/outputs/glorys_rmsetotal_", test_region, ".rds", sep=""))
-  saveRDS(rmse_summary, file=paste("code/test_wc_O2_predictions/outputs/glorys_summary_", test_region, ".rds", sep=""))
   }
   
-#Plot?
+    saveRDS(table, file=paste("code/test_wc_O2_predictions/outputs/glorys2_rmse_", test_region, ".rds", sep=""))
+    saveRDS(table2, file=paste("code/test_wc_O2_predictions/outputs/glorys2_rmsetotal_", test_region, ".rds", sep=""))
+    #saveRDS(rmse_summary, file=paste("code/test_wc_O2_predictions/outputs/glorys2_summary_", test_region, ".rds", sep=""))
+  
+  #Plot?
   #Return RMSE table
-  return(rmse_summary)
+  return(table)
 }
 
 #Run

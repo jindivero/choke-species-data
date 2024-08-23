@@ -632,6 +632,7 @@ convert_glorys <- function(file_name, do_threshold) {
   
   # remove large list from memory
   rm(nc)
+  if(filter_time){
   nc_df$time <- round(nc_df$time)
   days <- unique(nc_df$time)
   n_days <- length(days)
@@ -640,6 +641,8 @@ convert_glorys <- function(file_name, do_threshold) {
   days.2.use <- seq(first_day, last_day, by = 10)
   nc_df <- nc_df %>%
     filter(time %in% days.2.use)
+  }
+  nc_df$time <- round(nc_df$time)
   nc_df$time <- (as_datetime("1950-01-01")+hours(nc_df$time))
   nc_df <- nc_df %>%
     st_as_sf(coords=c('longitude','latitude'),crs=4326,remove = F) %>%  
