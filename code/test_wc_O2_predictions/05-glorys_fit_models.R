@@ -49,7 +49,7 @@ dat$sigma0[dat$sigma0 <= minsigma0] <- minsigma0
 dat$depth_ln <- log(dat$depth)
 
 #Save model outputs?
-savemodel=F
+savemodel=T
 #Plot models and save?
 plotmodel = T
 #Remove OCNMS?
@@ -79,7 +79,7 @@ glorys_fit <- function(dat, test_region, plot_title){
 
   #Create lists and matrices for storing RMSE and list for storing prediction datasets
   rmse_summary <- matrix(data=NA, nrow=length(yearlist), ncol=2)
-  colnames(rmse_summary) <- c("RMSE", "n_test")
+  colnames(rmse_summary) <- c("glorys", "n_test")
   output <- list()
   
   ##For each year of testing data, pull out GLORYS data, fit model, and calculate RMSE
@@ -191,13 +191,37 @@ glorys_fit <- function(dat, test_region, plot_title){
   }
   
   #Calculate overall RMSE
-  rmse_total <- calc_rmse(rmse_summary$RMSE, rmse_summary$n_test)
-  print(rmse_total)
+  rmse_total <- as.data.frame(calc_rmse(rmse_summary$glorys, rmse_summary$n_test))
+  colnames(rmse_total) <- "rmse_total"
+  rownames(rmse_total) <- "glorys"
+
+  #Combine with synoptic table
+  file <- list.files("code/test_wc_O2_predictions/outputs", pattern=paste("rmse_years_",test_region,".rds", sep=""))
+  table <- readRDS(paste("code/test_wc_O2_predictions/outputs/", file, sep=""))
+  file2 <- list.files("code/test_wc_O2_predictions/outputs", pattern=paste("rmse_total_",test_region,".rds", sep=""))
+  table2 <- readRDS(paste("code/test_wc_O2_predictions/outputs/", file2, sep=""))
   
-  #Save
- saveRDS(rmse_summary, file=paste("code/test_wc_O2_predictions/outputs/glorys_rmse_years_", test_region, ".rds", sep=""))
-  #saveRDS(rmse_total, file=paste("code/test_wc_O2_predictions/outputs/glorys_rmse_total_", test_region, ".rds", sep=""))
+  table$glorys <- rmse_summary$glorys
+  table2 <- bind_rows(table2,rmse_total)
   
+ #Plot RMSE and save
+  rmse_long <- pivot_longer(table, c(1:4,9), names_to="model")
+  #Remove rows with less than n=50 in test data
+  ggplot(rmse_long, aes(x=year, y=value))+
+    geom_col(aes(fill=model), position="dodge")+
+    ylab("RMSE")+
+    ggtitle(paste(plot_title))+
+    xlab("Year")+
+    theme(legend.position="top")+
+    theme_set(theme_bw(base_size = 15))+
+    theme_update(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+  ggsave(paste("code/test_wc_O2_predictions/outputs/glorys_", test_region, "_rmse_plot.pdf", sep=""))
+  
+  saveRDS(table, file=paste("code/test_wc_O2_predictions/outputs/glorys_rmse_", test_region, ".rds", sep=""))
+  saveRDS(table2, file=paste("code/test_wc_O2_predictions/outputs/glorys_rmsetotal_", test_region, ".rds", sep=""))
+  saveRDS(rmse_summary, file=paste("code/test_wc_O2_predictions/outputs/glorys_summary_", test_region, ".rds", sep=""))
+  
+#Plot?
   #Return RMSE table
   return(rmse_summary)
 }

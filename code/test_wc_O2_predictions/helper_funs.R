@@ -230,7 +230,7 @@ plot_simple <- function(output, dat.2.use){
     xlab("Year")+
     ylab("Number of \n observations")
   
-  model_names <- c("Persistent Model", "Persistent + Year Model", "Spatio-Temporal Model")
+  model_names <- c("Persistent Spatial", "Persistent Spatial + Year", "Year+Temp+Salinity", "Temp+Salinity+Spatio-temporal")
   test_year <- unique(test_data$year)
   test_region <- unique(test_data$region)
   pred_plots <- list()
@@ -351,13 +351,15 @@ plot_simple <- function(output, dat.2.use){
   figure2 <- annotate_figure(figure2, left=paste(model_names[1]), fig.lab.size=14, fig.lab.face="bold")
   figure3 <- ggarrange(pred_plots[[2]], resid_plots[[2]], pred_obs[[2]], ncol=3, nrow=1, legend="none")
   figure3 <- annotate_figure(figure3, left=paste(model_names[2]), fig.lab.size=14, fig.lab.face="bold")
-  figure4 <- try(ggarrange(pred_plots[[3]], resid_plots[[3]], pred_obs[[3]], ncol=3, nrow=1))
-  figure4 <- try(annotate_figure(figure4, left=paste(model_names[3]), fig.lab.size=14, fig.lab.face="bold"))
-  if(!is.list(figure4)){
+  figure4 <- ggarrange(pred_plots[[3]], resid_plots[[3]], pred_obs[[3]], ncol=3, nrow=1, legend="none")
+  figure4 <- annotate_figure(figure3, left=paste(model_names[3]), fig.lab.size=14, fig.lab.face="bold")
+  figure5 <- try(ggarrange(pred_plots[[4]], resid_plots[[4]], pred_obs[[4]], ncol=3, nrow=1))
+  figure5 <- try(annotate_figure(figure5, left=paste(model_names[4]), fig.lab.size=14, fig.lab.face="bold"))
+  if(!is.list(figure5)){
     figure4 <- ggarrange(ggplot(), ggplot(), ggplot())
   }
   
-  figure <- ggarrange(figure1, figure2, figure3, figure4, ncol=1, nrow=4, heights=c(1,1,1,1.25), align="h")
+  figure <- ggarrange(figure1, figure2, figure3, figure4, figure5, ncol=1, nrow=5, heights=c(1,1,1,1, 1.25), align="h")
   annotate_figure(figure, top=paste(test_year), fig.lab.size=18, fig.lab.face="bold")
   
   ggsave(
@@ -382,6 +384,8 @@ plot_glorys <- function(preds, dat.2.use){
   ylims <- c(min(dat.2.use$Y)*1000, max(dat.2.use$Y)*1000)
   lats <- c(round(min(dat.2.use$latitude)),  round(max(dat.2.use$latitude)))
   lons <- c(round(min(dat.2.use$longitude)+2), round(max(dat.2.use$longitude)))
+  test_region <- unique(preds$region)
+  test_year <- unique(preds$year)
   
     try(pred_plot <-  ggplot(us_coast_proj) + geom_sf() +
           geom_point(preds, mapping=aes(x=X*1000, y=Y*1000, col=o2),
@@ -415,7 +419,8 @@ plot_glorys <- function(preds, dat.2.use){
           theme(legend.text = element_text(size = 11)) +
           theme(legend.position = "bottom") +
           guides(colour = guide_colourbar(title.position = "top", title.hjust =
-                                            0.5)))
+                                            0.5)))+
+    ggtitle("Predictions")
     
     try(resid_plot <-  ggplot(us_coast_proj) + geom_sf() +
           geom_point(preds, mapping=aes(x=X*1000, y=Y*1000, col=residual),
@@ -445,9 +450,10 @@ plot_glorys <- function(preds, dat.2.use){
           theme(legend.text = element_text(size = 11)) +
           theme(legend.position = "bottom") +
           guides(colour = guide_colourbar(title.position = "top", title.hjust =
-                                            0.5)))
+                                            0.5)))+
+        ggtitle("Prediction Residuals")
     
-    try(pred_obs <- ggplot(data = test_predict_O2, aes(x = o2, y = est, col = latitude)) +
+    try(pred_obs <- ggplot(data = preds, aes(x = o2, y = est, col = latitude)) +
           geom_point() +
           scale_colour_distiller(
             # limits = c(31, 50),
@@ -476,6 +482,7 @@ plot_glorys <- function(preds, dat.2.use){
           labs(x = "Observed", y = "Predicted") +
           geom_abline(intercept = 0, slope = 1)+
           theme(legend.position="bottom"))
+  
   # plot residuals vs. prediction
   #  resid_vs_pred <- ggplot(data = test_predict_O2, aes(x = (est), y = residual, col = Y)) +
   # geom_point() +
@@ -489,17 +496,17 @@ plot_glorys <- function(preds, dat.2.use){
   # labs(x = "Predicted", y = "Residual") +
   # theme(legend.position = "none")
   
-  figure <- ggarrange(pred_plot, resid_plot, pred_obs, ncol=3, nrow=1, legend="none", labels=c("A", "B", "C"))
+  figure <- ggarrange(pred_plot, resid_plot, pred_obs, ncol=3, nrow=1, labels=c("A", "B", "C"), widths=c(1,1,2), heights=c(1,1,0.3))
   annotate_figure(figure, top=paste(test_year), fig.lab.size=18, fig.lab.face="bold")
   
   ggsave(
-    paste("code/test_wc_O2_predictions/outputs/plots/", test_region, "/glorys_", test_year, ".pdf", sep=""),
+    paste("code/test_wc_O2_predictions/outputs/plots/", test_region, "/glorys/_glorys", test_year, ".pdf", sep=""),
     plot = last_plot(),
     device = NULL,
     path = NULL,
     scale = 1,
     width = 8.5,
-    height = 11,
+    height = 5.5,
     units = c("in"),
     dpi = 600,
     limitsize = TRUE

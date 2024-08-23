@@ -123,6 +123,7 @@ for (i in 1:length(yearlist)) {
                       xy_cols = c("X", "Y"),
                       cutoff = 45)
   }
+  
   m2 <- try(sdmTMB(
     formula = o2  ~ 1+as.factor(year) + s(depth_ln) + s(doy),
     mesh = spde,
@@ -132,7 +133,18 @@ for (i in 1:length(yearlist)) {
     spatiotemporal  = "off",
     extra_time=c(extra_years)
   ))
-  
+  if(!is.list(m2)){
+    print("fitting m2 no intercept")
+    m2 <- try(sdmTMB(
+      formula = o2  ~ 0+as.factor(year) + s(depth_ln) + s(doy),
+      mesh = spde,
+      data = train_data,
+      family = gaussian(),
+      spatial = "on",
+      spatiotemporal  = "off",
+      extra_time=c(extra_years)))
+    
+  }
   print("fitting m3")
   m3 <- try(sdmTMB(
     formula = o2  ~ 1+as.factor(year)+s(sigma0) + s(temp) +  s(depth_ln) + s(doy),
@@ -143,6 +155,27 @@ for (i in 1:length(yearlist)) {
     spatiotemporal  = "off",
     extra_time=c(extra_years)
   ))
+  if(!is.list(m3)){
+    print("fitting m3 no intercept")
+   m3 <- try(sdmTMB(
+      formula = o2  ~ 0 + as.factor(year)+s(sigma0) + s(temp) +  s(depth_ln) + s(doy),
+      mesh = spde,
+      data = train_data,
+      family = gaussian(),
+      spatial = "on",
+      spatiotemporal  = "off",
+      extra_time=c(extra_years)
+    ))
+  }
+  if(length(extra_years)>0) {
+    train_data <- dat.2.use %>%
+      filter(!((survey %in% c("nwfsc", "dfo", "goa", "EBS", "iphc") & year==test_year)))
+    train_data <- as.data.frame(train_data)
+    spde <- make_mesh(data = train_data,
+                      xy_cols = c("X", "Y"),
+                      cutoff = 45)
+  }
+  
   print("fitting m4")
   m4 <- try(sdmTMB(
     formula = o2  ~ 1+s(sigma0) + s(temp) +  s(depth_ln) + s(doy),
@@ -154,18 +187,16 @@ for (i in 1:length(yearlist)) {
     spatiotemporal  = "IID",
     extra_time=c(extra_years)
   ))
-
-
-  models <- list(m1,m2,m3, m4)
-  if(!is.list(m3)){
-    print("fitting m3 no intercept")
-   m3 <- try(sdmTMB(
-      formula = o2  ~ 0 + s(sigma0) + s(temp) +  s(depth_ln) + s(doy),
+  if(!is.list(m4)){
+    print("fitting m4 no intercept")
+    m4 <- try(sdmTMB(
+      formula = o2  ~ 0+s(sigma0) + s(temp) +  s(depth_ln) + s(doy),
       mesh = spde,
       data = train_data,
       family = gaussian(),
+      time = "year",
       spatial = "on",
-      spatiotemporal  = "off",
+      spatiotemporal  = "IID",
       extra_time=c(extra_years)
     ))
   }
@@ -181,8 +212,8 @@ for (i in 1:length(yearlist)) {
     #Number of datapoints in each year for calculating overall RMSE late
     if(j==1){
       ncols <- ncol(rmse_summary)
-      rmse_summary[i,ncols -2] <- nrow(test_data)
-      rmse_summary[i,ncols - 1] <- nrow(train_data)
+      rmse_summary[i,ncols -1] <- nrow(test_data)
+      rmse_summary[i,ncols] <- nrow(train_data)
     }
   }
   tmp.output <- list(train_data, test_data, tmp.preds, models)
@@ -192,9 +223,9 @@ for (i in 1:length(yearlist)) {
   if(plotmodel){
     print("plots")
     try(plot_simple(tmp.output, dat.2.use))
-    if(is.list(models[3])){
+    if(is.list(models[4])){
       print("marginal effects")
-    try(plot_marginal_effects(models, tmp.preds, dat.2.use, 3))
+    try(plot_marginal_effects(models, tmp.preds, dat.2.use, 4))
     }
   }
 }
@@ -202,6 +233,7 @@ for (i in 1:length(yearlist)) {
   #Clean RMSE table
   rmse_summary <- as.data.frame(rmse_summary)
   rmse_summary$year <- yearlist
+  rmse_summary$region <- test_region
   rmse_summary$persistent_spatial <- as.numeric(rmse_summary$persistent_spatial)
   rmse_summary$persistent_spatial_year <- as.numeric(rmse_summary$persistent_spatial_year)
   rmse_summary$year_temp_salinity <- as.numeric(rmse_summary$year_temp_salinity)
@@ -213,7 +245,6 @@ for (i in 1:length(yearlist)) {
   }
 
   #Plot RMSE and save
-
   rmse_long <- pivot_longer(rmse_summary, 1:models.2.use, names_to="model")
   #Remove rows with less than n=50 in test data
   rmse_long <- filter(rmse_summary, n_test>50)
@@ -248,17 +279,3 @@ rmse_bc <- fit_models(dat, "bc", "British Columbia")
 rmse_goa <- fit_models(dat, "goa", "Gulf of Alaska")
 rmse_ebs <- fit_models(dat, "ebs", "Eastern Bering Sea")
 rmse_ai <- fit_models(dat, "ai", "Aleutian Islands")
-
-##Combine overall RMSE of each region into a single table
-#Read files
-rmse_total_cc <- readRDS("code/test_wc_O2_predictions/outputs/rmse_total_cc.rds")
-rmse_total_bc <- readRDS("code/test_wc_O2_predictions/outputs/rmse_total_bc.rds")
-rmse_total_goa <- readRDS("code/test_wc_O2_predictions/outputs/rmse_total_goa.rds")
-rmse_total_ebs <- readRDS("code/test_wc_O2_predictions/outputs/rmse_total_ebs.rds")
-rmse_total_ai <- readRDS("code/test_wc_O2_predictions/outputs/rmse_total_ai.rds")
-
-#Combine
-rmse_totals <- bind_cols(rmse_total_cc, rmse_total_bc, rmse_total_goa, rmse_total_ebs, rmse_total_ai)
-colnames(rmse_totals) <- c("cc", "bc", "goa", "ebs", "ai")
-
-saveRDS(rmse_totals, file="rmse_total_combined.rds")
