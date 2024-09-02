@@ -594,8 +594,6 @@ plot_marginal_effects <- function(models,preds, dat.2.use, i){
         guides(colour = guide_colourbar(title.position = "top", title.hjust =
                                           0.5)))
   
-  figure <- ggarrange(omega, epsilon)
-  annotate_figure(figure, top=paste(test_year))
   ggsave(
     paste("code/test_wc_O2_predictions/outputs/plots/", test_region, "/spatiotemp_var/spatiotemp_var_", test_year, ".pdf", sep=""),
     plot = last_plot(),
@@ -655,6 +653,29 @@ convert_glorys <- function(file_name, do_threshold) {
   return(nc_df)
 }
 
+isolate_preds <- function(x){
+  preds <- try(x[["predictions"]][[4]])
+  return(preds)
+}
+
+isolate_preds2 <- function(x){
+  preds <- try(x[["predictions"]])
+  return(preds)
+}
+
+
+combine_preds <- function(x, glorys){
+  if(!glorys){
+  preds <- lapply(x, isolate_preds)
+  }
+  if(glorys){
+    preds <- lapply(x, isolate_preds2)
+  }
+  row_lt2 <- which(sapply(preds, is.data.frame))
+  preds <- preds[row_lt2]
+  preds <- bind_rows(preds)
+  return(preds)
+}
 
 ##still working on this
 #function to pull evaluation plots for just one region, model, year
@@ -673,5 +694,4 @@ plot_one <- function(region, year, model){
   pred3 <- test[[2]][[1]]
   ggplot()
 }
-
 
