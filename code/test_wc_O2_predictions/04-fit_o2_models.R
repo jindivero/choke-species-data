@@ -33,6 +33,9 @@ dat <- filter(dat, o2<1500)
 minsigma0 <- 24
 dat$sigma0[dat$sigma0 <= minsigma0] <- minsigma0
 
+# remove older (earlier than 2000) data
+dat <- dplyr::filter(dat, year >=2000)
+
 #Log depth
 dat$depth_ln <- log(dat$depth)
 
@@ -184,7 +187,7 @@ for (i in 1:length(yearlist)) {
     family = gaussian(),
     time = "year",
     spatial = "on",
-    spatiotemporal  = "IID",
+    spatiotemporal  = "iid",
     extra_time=c(extra_years)
   ))
   if(!is.list(m4)){
@@ -196,7 +199,7 @@ for (i in 1:length(yearlist)) {
       family = gaussian(),
       time = "year",
       spatial = "on",
-      spatiotemporal  = "IID",
+      spatiotemporal  = "ar1",
       extra_time=c(extra_years)
     ))
   }
